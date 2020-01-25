@@ -4,9 +4,15 @@ use chrono::{Date, FixedOffset};
 #[derive(Debug)]
 pub struct Route {
     agency_id: String,
-    route_short_name: String,
-    route_long_name: String,
+    short_name: String,
+    long_name: String,
     route_type: i32, // TODO replace with an enum
+}
+
+impl Route {
+    pub fn new(agency_id: String, short_name: String, long_name: String, route_type: i32) -> Route {
+        Route {agency_id: agency_id, short_name: short_name, long_name: long_name, route_type: route_type}
+    }
 }
 
 #[derive(Debug)]

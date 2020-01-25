@@ -100,15 +100,29 @@ pub fn load_stops(path: &Path) -> HashMap<String, Node> {
 /// Loads the contents of routes.txt
 /// # Arguments
 /// * path - the path to the directory routes.txt is located in
-fn load_routes(path: &Path) -> HashMap<String, Trip> {
-    // TODO load routes
-    HashMap::new()
+pub fn load_routes(path: &Path) -> HashMap<String, Route> {
+    let mut routes = HashMap::new();
+    let mut file_path_buf = path.to_path_buf();
+    file_path_buf.push(Path::new("routes.txt"));
+    let file = File::open(file_path_buf.as_path()).unwrap(); // No need for error handling, if this fails, we want to panic
+    let mut rdr = csv::Reader::from_reader(file);
+    for result in rdr.records() {
+        let record = result.unwrap();
+        let route_id = String::from(record.get(RouteFields::Id as usize).unwrap());
+        let agency_id = String::from(record.get(RouteFields::AgencyId as usize).unwrap());
+        let short_name = String::from(record.get(RouteFields::ShortName as usize).unwrap());
+        let long_name = String::from(record.get(RouteFields::LongName as usize).unwrap());
+        let route_type: i32 = record.get(RouteFields::Type as usize).unwrap().parse().unwrap();
+        let route = Route::new(agency_id, short_name, long_name, route_type);
+        routes.insert(route_id, route);
+    }
+    return routes;
 }
 
 /// Loads the contents of trips.txt
 /// # Arguments
 /// * path - the path to the directory trips.txt is located in
-fn load_trips(path: &Path) -> HashMap<String, Route> {
+fn load_trips(path: &Path) -> HashMap<String, Trip> {
     // TODO load trips
     HashMap::new()
 }
