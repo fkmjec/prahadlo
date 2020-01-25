@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use chrono::{Date, FixedOffset};
+use chrono::NaiveDate;
 
 #[derive(Debug)]
 pub struct Route {
@@ -21,11 +21,23 @@ pub struct Trip {
     service_id: String,
 }
 
+impl Trip {
+    pub fn new(route_id: String, service_id: String) -> Trip {
+        Trip {route_id: route_id, service_id: service_id}
+    }
+}
+
 #[derive(Debug)]
 pub struct Service {
-    service_days: u8,
-    start_date: Date<FixedOffset>,
-    end_date: Date<FixedOffset>,
+    pub monday: bool,
+    pub tuesday: bool,
+    pub wednesday: bool,
+    pub thursday: bool,
+    pub friday: bool,
+    pub saturday: bool,
+    pub sunday: bool,
+    pub start_date: NaiveDate,
+    pub end_date: NaiveDate,
 }
 
 #[derive(Debug)]
