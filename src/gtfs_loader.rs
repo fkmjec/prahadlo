@@ -1,16 +1,15 @@
-extern crate csv;
-
 use crate::transport_data_structures::*;
 use std::path::Path;
+use std::fs::File;
 use std::collections::HashMap;
 
-enum StopsFields {
-    StopId,
-    StopName,
-    StopLat,
-    StopLon,
+enum StopFields {
+    Id,
+    Name,
+    Lat,
+    Lon,
     ZoneId,
-    StopUrl,
+    Url,
     LocationType,
     ParentStation,
     WheelchairBoarding,
@@ -18,31 +17,31 @@ enum StopsFields {
     PlatformCode,
 }
 
-enum RoutesFields {
-    RouteId,
+enum RouteFields {
+    Id,
     AgencyId,
-    RouteShortName,
-    RouteLongName,
-    RouteType,
-    RouteUrl,
-    RouteColor,
-    RouteTextColor,
+    ShortName,
+    LongName,
+    Type,
+    Url,
+    Color,
+    TextColor,
     IsNight,
 }
 
-enum TripsFields {
+enum TripFields {
     RouteId,
     ServiceId,
-    TripId,
-    TripHeadsign,
-    TripShortName,
+    Id,
+    Headsign,
+    ShortName,
     DirectionId,
     BlockId,
     ShapeId,
     WheelchairAccessible,
     BikesAllowed,
     Exceptional,
-    TripOperationType,
+    OperationType,
 }
 
 enum StopTimesFields {
@@ -79,9 +78,23 @@ enum CalendarDatesFields {
 /// Loads the contents of stops.txt
 /// # Arguments
 /// * path - the path to the directory stops.txt is located in
-fn load_stops(path: &Path) -> HashMap<String, Node> {
-    // TODO load stops
-    HashMap::new()
+pub fn load_stops(path: &Path) -> HashMap<String, Node> {
+    let mut stops = HashMap::new();
+    let mut file_path_buf = path.to_path_buf();
+    file_path_buf.push(Path::new("stops.txt"));
+    let file = File::open(file_path_buf.as_path()).unwrap(); // No need for error handling, if this fails, we want to panic
+    let mut rdr = csv::Reader::from_reader(file);
+    for result in rdr.records() {
+        let record = result.unwrap();
+        let stop_id = String::from(record.get(StopFields::Id as usize).unwrap());
+        let name = String::from(record.get(StopFields::Name as usize).unwrap());
+        let lat: f32 = record.get(StopFields::Lat as usize).unwrap().parse().unwrap();
+        let lon: f32 = record.get(StopFields::Lon as usize).unwrap().parse().unwrap();
+        let location_type: i32 = record.get(StopFields::LocationType as usize).unwrap().parse().unwrap();
+        let node = Node::new(name, lat, lon, location_type);
+        stops.insert(stop_id, node);
+    }
+    return stops;
 }
 
 /// Loads the contents of routes.txt

@@ -1,8 +1,7 @@
-extern crate chrono;
-
 use std::collections::HashMap;
 use chrono::{Date, FixedOffset};
 
+#[derive(Debug)]
 pub struct Route {
     agency_id: String,
     route_short_name: String,
@@ -10,35 +9,44 @@ pub struct Route {
     route_type: i32, // TODO replace with an enum
 }
 
+#[derive(Debug)]
 pub struct Trip {
     route_id: String,
     service_id: String,
 }
 
+#[derive(Debug)]
 pub struct Service {
     service_days: u8,
     start_date: Date<FixedOffset>,
     end_date: Date<FixedOffset>,
 }
 
+#[derive(Debug)]
 pub struct Node {
-    id: String,
     name: String,
     lat: f32,
     lon: f32,
     location_type: i32,
-    timezone: String,
     edges: Vec<Edge>,
 }
 
+impl Node {
+    pub fn new(name: String, lat: f32, lon: f32, location_type: i32) -> Node {
+        Node {name: name, lat: lat, lon: lon, location_type: location_type, edges: Vec::new()}
+    }
+}
+
+#[derive(Debug)]
 pub struct Edge {
-    leaves_at: i32, // probably since the start of the week, but I need to make this straight in the next week
+    leaves_at: i32, // probably since the start of the week, but I need to make this straight
     duration: i32,
     trip_id: Option<String>,
     mean: Option<i32>, // TODO replace with an enum
     target_node: String,
 }
 
+#[derive(Debug)]
 pub struct Network {
     routes: HashMap<String, Route>,
     trips: HashMap<String, Trip>,
