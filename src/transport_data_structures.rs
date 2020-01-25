@@ -1,39 +1,52 @@
-pub mod transport_data_structures {
-    use std::collections::HashMap;
+extern crate chrono;
 
-    struct Route {
-        agency_id: String,
-        route_short_name: String,
-        route_long_name: String,
-        route_type: i32, // TODO replace with an enum
-    }
+use std::collections::HashMap;
+use chrono::{Date, FixedOffset};
 
-    struct Trip {
-        route_id: String,
-        service_id: String,
-    }
+pub struct Route {
+    agency_id: String,
+    route_short_name: String,
+    route_long_name: String,
+    route_type: i32, // TODO replace with an enum
+}
 
-    struct Node {
-        id: String,
-        name: String,
-        lat: f32,
-        lon: f32,
-        location_type: i32,
-        timezone: String,
-        edges: Vec<Edge>,
-    }
+pub struct Trip {
+    route_id: String,
+    service_id: String,
+}
 
-    struct Edge {
-        leaves_at: i32, // probably since the start of the week, but I need to make this straight in the next week
-        duration: i32,
-        trip_id: Option<String>,
-        mean: Option<i32>, // TODO replace with an enum
-        target_node: String,
-    }
+pub struct Service {
+    service_days: u8,
+    start_date: Date<FixedOffset>,
+    end_date: Date<FixedOffset>,
+}
 
-    struct Graph {
-        routes: HashMap<String, Route>,
-        trips: HashMap<String, Trip>,
-        nodes: HashMap<String, Node>,
+pub struct Node {
+    id: String,
+    name: String,
+    lat: f32,
+    lon: f32,
+    location_type: i32,
+    timezone: String,
+    edges: Vec<Edge>,
+}
+
+pub struct Edge {
+    leaves_at: i32, // probably since the start of the week, but I need to make this straight in the next week
+    duration: i32,
+    trip_id: Option<String>,
+    mean: Option<i32>, // TODO replace with an enum
+    target_node: String,
+}
+
+pub struct Network {
+    routes: HashMap<String, Route>,
+    trips: HashMap<String, Trip>,
+    nodes: HashMap<String, Node>,
+}
+
+impl Network {
+    pub fn new(routes: HashMap<String, Route>, trips: HashMap<String, Trip>, nodes: HashMap<String, Node>) -> Network {
+        Network {routes: routes, trips: trips, nodes: nodes}
     }
-} 
+}
