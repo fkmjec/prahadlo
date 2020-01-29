@@ -28,19 +28,6 @@ impl Trip {
 }
 
 #[derive(Debug)]
-pub struct Service {
-    pub monday: bool,
-    pub tuesday: bool,
-    pub wednesday: bool,
-    pub thursday: bool,
-    pub friday: bool,
-    pub saturday: bool,
-    pub sunday: bool,
-    pub start_date: NaiveDate,
-    pub end_date: NaiveDate,
-}
-
-#[derive(Debug)]
 pub struct Node {
     name: String,
     lat: f32,

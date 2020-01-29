@@ -1,6 +1,9 @@
 use crate::transport_data_structures::*;
+use std::str::FromStr;
+use std::num::ParseIntError;
 use std::path::Path;
 use std::fs::File;
+use std::error::Error;
 use std::collections::HashMap;
 use chrono::NaiveDate;
 
@@ -74,6 +77,44 @@ enum CalendarDatesFields {
     ServiceId,
     Date,
     ExceptionType,
+}
+
+#[derive(Debug)]
+enum ExceptionType {
+    Added = 1,
+    Removed = 2,
+}
+
+impl FromStr for ExceptionType {
+    type Err;
+    fn from_str(s: &str) -> Result<ExceptionType, E> {
+        let parsed_int: i32 = s.parse()?;
+        return match parsed_int {
+            1 => Ok(ExceptionType::Added),
+            2 => Ok(ExceptionType::Removed),
+            _ => Err("The number is out of range of the ExceptionType enum"),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Service {
+    pub monday: bool,
+    pub tuesday: bool,
+    pub wednesday: bool,
+    pub thursday: bool,
+    pub friday: bool,
+    pub saturday: bool,
+    pub sunday: bool,
+    pub start_date: NaiveDate,
+    pub end_date: NaiveDate,
+    pub exceptions: Vec<Exception>,
+}
+
+#[derive(Debug)]
+pub struct Exception {
+    pub date: NaiveDate,
+    pub exception_type: ExceptionType,
 }
 
 /// Loads the contents of stops.txt
@@ -178,10 +219,33 @@ pub fn load_services(path: &Path) -> HashMap<String, Service> {
             sunday: sunday,
             start_date: start_date,
             end_date: end_date,
+            exceptions: Vec::new(),
         };
         services.insert(service_id, service);
     }
     return services;
+}
+
+/// Loads service exceptions from calendar_dates.txt and adds them to the HashMap
+/// # Arguments
+/// * path - the path to the gtfs directory
+/// * services - loaded contents of calendar.txt
+pub fn load_service_exceptions(path: &Path, services: &mut HashMap<String, Service>) {
+    let mut file_path_buf = path.to_path_buf();
+    file_path_buf.push(Path::new("calendar_dates.txt"));
+    let file = File::open(file_path_buf.as_path()).unwrap(); // No need for error handling, if this fails, we want to panic
+    let mut rdr = csv::Reader::from_reader(file);
+    for result in rdr.records() {
+        let record = result.unwrap();
+        let service_id = String::from(record.get(CalendarDatesFields::ServiceId as usize).unwrap());
+        let date = parse_ymd(record.get(CalendarDatesFields::Date as usize).unwrap());
+        let exception_type = record.get(CalendarDatesFields::ExceptionType as usize).unwrap().parse::<ExceptionType>().unwrap();
+        let exception = Exception {
+            date: date,
+            exception_type: exception_type
+        };
+        services.get_mut(&service_id).unwrap().exceptions.push(exception);
+    }
 }
 
 /// Creates the edges to be used in the inner workings of the search algorithm
