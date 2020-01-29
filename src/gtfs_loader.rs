@@ -3,7 +3,8 @@ use std::str::FromStr;
 use std::num::ParseIntError;
 use std::path::Path;
 use std::fs::File;
-use std::error::Error;
+use std::io::Error as IoError;
+use std::io::ErrorKind;
 use std::collections::HashMap;
 use chrono::NaiveDate;
 
@@ -80,19 +81,22 @@ enum CalendarDatesFields {
 }
 
 #[derive(Debug)]
-enum ExceptionType {
+pub enum ExceptionType {
     Added = 1,
     Removed = 2,
 }
 
 impl FromStr for ExceptionType {
-    type Err;
-    fn from_str(s: &str) -> Result<ExceptionType, E> {
-        let parsed_int: i32 = s.parse()?;
+    type Err = IoError;
+    fn from_str(s: &str) -> Result<ExceptionType, IoError> {
+        let parsed_int: i32 = match s.parse() {
+            Ok(i) => i,
+            Err(e) => return Err(IoError::new(ErrorKind::InvalidData, e)),
+        };
         return match parsed_int {
             1 => Ok(ExceptionType::Added),
             2 => Ok(ExceptionType::Removed),
-            _ => Err("The number is out of range of the ExceptionType enum"),
+            _ => Err(IoError::new(ErrorKind::Other, "Number out of ExceptionType parsing range.")),
         }
     }
 }
