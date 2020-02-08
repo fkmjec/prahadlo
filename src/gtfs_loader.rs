@@ -6,139 +6,112 @@ use std::fs::File;
 use std::io::Error as IoError;
 use std::io::ErrorKind;
 use std::collections::HashMap;
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveTime};
+use serde::Deserialize;
 
-enum StopFields {
-    Id,
-    Name,
-    Lat,
-    Lon,
-    ZoneId,
-    Url,
-    LocationType,
-    ParentStation,
-    WheelchairBoarding,
-    LevelId,
-    PlatformCode,
+#[derive(Debug, Deserialize)]
+struct Agency {
+    pub agency_id: String,
+    pub agency_name: String,
+    pub agency_url: String,
+    pub agency_timezone: String,
+    pub agency_lang: String,
+    pub agency_phone: String,
 }
 
-enum RouteFields {
-    Id,
-    AgencyId,
-    ShortName,
-    LongName,
-    Type,
-    Url,
-    Color,
-    TextColor,
-    IsNight,
+#[derive(Debug, Deserialize)]
+struct Stop {
+    pub stop_id: String,
+    pub stop_name: String,
+    pub stop_lat: f32,
+    pub stop_lon: f32,
+    pub zone_id: String,
+    pub stop_url: Option<String>,
+    pub location_type: i32,
+    pub parent_station: Option<String>,
+    pub wheelchair_boarding: Option<i32>,
+    pub level_id: Option<i32>,
+    pub platform_code: Option<i32>,
 }
 
-enum TripFields {
-    RouteId,
-    ServiceId,
-    Id,
-    Headsign,
-    ShortName,
-    DirectionId,
-    BlockId,
-    ShapeId,
-    WheelchairAccessible,
-    BikesAllowed,
-    Exceptional,
-    OperationType,
+#[derive(Debug, Deserialize)]
+struct Route {
+    pub route_id: String,
+    pub agency_id: String,
+    pub route_short_name: String,
+    pub route_long_name: String,
+    pub route_type: i32,
+    pub route_url: Option<String>,
+    pub route_color: Option<String>,
+    pub route_text_color: Option<String>,
+    pub is_night: String,
 }
 
-enum StopTimesFields {
-    TripId,
-    ArrivalTime,
-    DepartureTime,
-    StopId,
-    StopSequence,
-    StopHeadsign,
-    PickupType,
-    DropOffType,
-    ShapeDistTraveled,
+#[derive(Debug, Deserialize)]
+struct Trip {
+    pub route_id: String,
+    pub service_id: String,
+    pub trip_id: String,
+    pub trip_headsign: Option<String>,
+    pub trip_short_name: Option<String>,
+    pub direction_id: i32,
+    pub block_id: Option<String>,
+    pub shape_id: Option<String>,
+    pub wheelchair_accessible: Option<i32>,
+    pub bikes_allowed: i32,
+    pub exceptional: i32,
+    pub trip_operation_type: i32,
 }
 
-enum CalendarFields {
-    ServiceId,
-    Monday,
-    Tuesday,
-    Wednesday,
-    Thursday,
-    Friday,
-    Saturday,
-    Sunday,
-    StartDate,
-    EndDate,
+#[derive(Debug, Deserialize)]
+struct StopTime {
+    pub trip_id: String,
+    pub arrival_time: NaiveTime,
+    pub departure_time: NaiveTime,
+    pub stop_id: String,
+    pub stop_sequence: i32,
+    pub stop_headsign: Option<String>,
+    pub pickup_type: i32,
+    pub drop_off_type: i32,
+    pub shape_dist_travelled: i32,
 }
 
-enum CalendarDatesFields {
-    ServiceId,
-    Date,
-    ExceptionType,
+#[derive(Debug, Deserialize)]
+struct Service {
+    pub service_id: String, 
+    pub monday: i32,
+    pub tuesday:i32,
+    pub wednesday: i32,
+    pub thursday: i32,
+    pub friday: i32,
+    pub saturday: i32,
+    pub sunday: i32,
+    pub start_date: String, // Placeholder String
+    pub end_date: String, // Placeholder String
+    #[serde(default = "Vec::new", skip_deserializing)]
+    pub exceptions: Vec<ServiceException>,
 }
 
-#[derive(Debug)]
-pub enum ExceptionType {
-    Added = 1,
-    Removed = 2,
-}
-
-impl FromStr for ExceptionType {
-    type Err = IoError;
-    fn from_str(s: &str) -> Result<ExceptionType, IoError> {
-        let parsed_int: i32 = match s.parse() {
-            Ok(i) => i,
-            Err(e) => return Err(IoError::new(ErrorKind::InvalidData, e)),
-        };
-        return match parsed_int {
-            1 => Ok(ExceptionType::Added),
-            2 => Ok(ExceptionType::Removed),
-            _ => Err(IoError::new(ErrorKind::Other, "Number out of ExceptionType parsing range.")),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct Service {
-    pub monday: bool,
-    pub tuesday: bool,
-    pub wednesday: bool,
-    pub thursday: bool,
-    pub friday: bool,
-    pub saturday: bool,
-    pub sunday: bool,
-    pub start_date: NaiveDate,
-    pub end_date: NaiveDate,
-    pub exceptions: Vec<Exception>,
-}
-
-#[derive(Debug)]
-pub struct Exception {
-    pub date: NaiveDate,
-    pub exception_type: ExceptionType,
+#[derive(Debug, Deserialize)]
+struct ServiceException {
+    pub service_id: String,
+    pub date: String, // Placeholder String
+    pub exception_type: i32,
 }
 
 /// Loads the contents of stops.txt
 /// # Arguments
 /// * path - the path to the directory stops.txt is located in
-pub fn load_stops(path: &Path) -> HashMap<String, Node> {
+fn load_stops(path: &Path) -> HashMap<String, Node> {
     let mut stops = HashMap::new();
     let mut file_path_buf = path.to_path_buf();
     file_path_buf.push(Path::new("stops.txt"));
     let file = File::open(file_path_buf.as_path()).unwrap(); // No need for error handling, if this fails, we want to panic
     let mut rdr = csv::Reader::from_reader(file);
-    for result in rdr.records() {
-        let record = result.unwrap();
-        let stop_id = String::from(record.get(StopFields::Id as usize).unwrap());
-        let name = String::from(record.get(StopFields::Name as usize).unwrap());
-        let lat: f32 = record.get(StopFields::Lat as usize).unwrap().parse().unwrap();
-        let lon: f32 = record.get(StopFields::Lon as usize).unwrap().parse().unwrap();
-        let location_type: i32 = record.get(StopFields::LocationType as usize).unwrap().parse().unwrap();
-        let node = Node::new(name, lat, lon, location_type);
-        stops.insert(stop_id, node);
+    for result in rdr.deserialize() {
+        let record: Stop = result.unwrap();
+        let node = Node::new(record.stop_name.clone(), record.stop_lat.clone(), record.stop_lon.clone(), record.location_type.clone());
+        stops.insert(record.stop_id.clone(), node);
     }
     return stops;
 }
@@ -146,21 +119,15 @@ pub fn load_stops(path: &Path) -> HashMap<String, Node> {
 /// Loads the contents of routes.txt
 /// # Arguments
 /// * path - the path to the directory routes.txt is located in
-pub fn load_routes(path: &Path) -> HashMap<String, Route> {
+fn load_routes(path: &Path) -> HashMap<String, Route> {
     let mut routes = HashMap::new();
     let mut file_path_buf = path.to_path_buf();
     file_path_buf.push(Path::new("routes.txt"));
     let file = File::open(file_path_buf.as_path()).unwrap(); // No need for error handling, if this fails, we want to panic
     let mut rdr = csv::Reader::from_reader(file);
-    for result in rdr.records() {
-        let record = result.unwrap();
-        let route_id = String::from(record.get(RouteFields::Id as usize).unwrap());
-        let agency_id = String::from(record.get(RouteFields::AgencyId as usize).unwrap());
-        let short_name = String::from(record.get(RouteFields::ShortName as usize).unwrap());
-        let long_name = String::from(record.get(RouteFields::LongName as usize).unwrap());
-        let route_type: i32 = record.get(RouteFields::Type as usize).unwrap().parse().unwrap();
-        let route = Route::new(agency_id, short_name, long_name, route_type);
-        routes.insert(route_id, route);
+    for result in rdr.deserialize() {
+        let record: Route = result.unwrap();
+        routes.insert(record.route_id.clone(), record);
     }
     return routes;
 }
@@ -168,19 +135,15 @@ pub fn load_routes(path: &Path) -> HashMap<String, Route> {
 /// Loads the contents of trips.txt
 /// # Arguments
 /// * path - the path to the directory trips.txt is located in
-pub fn load_trips(path: &Path) -> HashMap<String, Trip> {
+fn load_trips(path: &Path) -> HashMap<String, Trip> {
     let mut trips = HashMap::new();
     let mut file_path_buf = path.to_path_buf();
     file_path_buf.push(Path::new("trips.txt"));
     let file = File::open(file_path_buf.as_path()).unwrap(); // No need for error handling, if this fails, we want to panic
     let mut rdr = csv::Reader::from_reader(file);
-    for result in rdr.records() {
-        let record = result.unwrap();
-        let trip_id = String::from(record.get(TripFields::Id as usize).unwrap());
-        let route_id = String::from(record.get(TripFields::RouteId as usize).unwrap());
-        let service_id = String::from(record.get(TripFields::ServiceId as usize).unwrap());
-        let trip = Trip::new(route_id, service_id);
-        trips.insert(trip_id, trip);
+    for result in rdr.deserialize() {
+        let record: Trip = result.unwrap();
+        trips.insert(record.trip_id.clone(), record);
     }
     return trips;
 }
@@ -195,37 +158,15 @@ fn parse_ymd(raw_ymd: &str) -> NaiveDate {
 /// Loads the contents of services.txt and service_dates.txt
 /// # Arguments
 /// * path - the path to the directory the files are located in
-pub fn load_services(path: &Path) -> HashMap<String, Service> {
+fn load_services(path: &Path) -> HashMap<String, Service> {
     let mut services = HashMap::new();
     let mut file_path_buf = path.to_path_buf();
     file_path_buf.push(Path::new("calendar.txt"));
     let file = File::open(file_path_buf.as_path()).unwrap(); // No need for error handling, if this fails, we want to panic
     let mut rdr = csv::Reader::from_reader(file);
-    for result in rdr.records() {
-        let record = result.unwrap();
-        let service_id = String::from(record.get(CalendarFields::ServiceId as usize).unwrap());
-        let monday = record.get(CalendarFields::Monday as usize).unwrap().parse::<i32>().unwrap() != 0;
-        let tuesday = record.get(CalendarFields::Tuesday as usize).unwrap().parse::<i32>().unwrap() != 0;
-        let wednesday = record.get(CalendarFields::Wednesday as usize).unwrap().parse::<i32>().unwrap() != 0;
-        let thursday = record.get(CalendarFields::Thursday as usize).unwrap().parse::<i32>().unwrap() != 0;
-        let friday = record.get(CalendarFields::Friday as usize).unwrap().parse::<i32>().unwrap() != 0;
-        let saturday = record.get(CalendarFields::Saturday as usize).unwrap().parse::<i32>().unwrap() != 0;
-        let sunday = record.get(CalendarFields::Sunday as usize).unwrap().parse::<i32>().unwrap() != 0;
-        let start_date = parse_ymd(record.get(CalendarFields::StartDate as usize).unwrap());
-        let end_date = parse_ymd(record.get(CalendarFields::StartDate as usize).unwrap());
-        let service = Service {
-            monday: monday,
-            tuesday: tuesday,
-            wednesday: wednesday,
-            thursday: thursday,
-            friday: friday,
-            saturday: saturday,
-            sunday: sunday,
-            start_date: start_date,
-            end_date: end_date,
-            exceptions: Vec::new(),
-        };
-        services.insert(service_id, service);
+    for result in rdr.deserialize() {
+        let record: Service = result.unwrap();
+        services.insert(record.service_id.clone(), record);
     }
     return services;
 }
@@ -234,21 +175,14 @@ pub fn load_services(path: &Path) -> HashMap<String, Service> {
 /// # Arguments
 /// * path - the path to the gtfs directory
 /// * services - loaded contents of calendar.txt
-pub fn load_service_exceptions(path: &Path, services: &mut HashMap<String, Service>) {
+fn load_service_exceptions(path: &Path, services: &mut HashMap<String, Service>) {
     let mut file_path_buf = path.to_path_buf();
     file_path_buf.push(Path::new("calendar_dates.txt"));
     let file = File::open(file_path_buf.as_path()).unwrap(); // No need for error handling, if this fails, we want to panic
     let mut rdr = csv::Reader::from_reader(file);
-    for result in rdr.records() {
-        let record = result.unwrap();
-        let service_id = String::from(record.get(CalendarDatesFields::ServiceId as usize).unwrap());
-        let date = parse_ymd(record.get(CalendarDatesFields::Date as usize).unwrap());
-        let exception_type = record.get(CalendarDatesFields::ExceptionType as usize).unwrap().parse::<ExceptionType>().unwrap();
-        let exception = Exception {
-            date: date,
-            exception_type: exception_type
-        };
-        services.get_mut(&service_id).unwrap().exceptions.push(exception);
+    for result in rdr.deserialize() {
+        let record: ServiceException = result.unwrap();
+        services.get_mut(&record.service_id).unwrap().exceptions.push(record);
     }
 }
 
@@ -261,10 +195,16 @@ pub fn load_service_exceptions(path: &Path, services: &mut HashMap<String, Servi
 /// * services - loaded contents of services.txt and service_dates.txt, specifying the dates
 /// the service is available on
 fn fill_edges(path: &Path, stops: &mut HashMap<String, Node>, routes: &HashMap<String, Route>, trips: &HashMap<String, Trip>, services: &HashMap<String, Service>) {
-    // TODO fill edges
+    let mut file_path_buf = path.to_path_buf();
+    file_path_buf.push(Path::new("calendar_dates.txt"));
+    let file = File::open(file_path_buf.as_path()).unwrap(); // No need for error handling, if this fails, we want to panic
+    let mut rdr = csv::Reader::from_reader(file);
+    for result in rdr.records() {
+
+    } 
 }
 
 pub fn load_transport_network(path: &Path) -> Network {
     // TODO load individual GTFS files 
-    Network::new(HashMap::new(), HashMap::new(), HashMap::new())
+    Network::new(HashMap::new())
 } 

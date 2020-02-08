@@ -2,32 +2,6 @@ use std::collections::HashMap;
 use chrono::NaiveDate;
 
 #[derive(Debug)]
-pub struct Route {
-    agency_id: String,
-    short_name: String,
-    long_name: String,
-    route_type: i32, // TODO replace with an enum
-}
-
-impl Route {
-    pub fn new(agency_id: String, short_name: String, long_name: String, route_type: i32) -> Route {
-        Route {agency_id: agency_id, short_name: short_name, long_name: long_name, route_type: route_type}
-    }
-}
-
-#[derive(Debug)]
-pub struct Trip {
-    route_id: String,
-    service_id: String,
-}
-
-impl Trip {
-    pub fn new(route_id: String, service_id: String) -> Trip {
-        Trip {route_id: route_id, service_id: service_id}
-    }
-}
-
-#[derive(Debug)]
 pub struct Node {
     name: String,
     lat: f32,
@@ -53,13 +27,11 @@ pub struct Edge {
 
 #[derive(Debug)]
 pub struct Network {
-    routes: HashMap<String, Route>,
-    trips: HashMap<String, Trip>,
     nodes: HashMap<String, Node>,
 }
 
 impl Network {
-    pub fn new(routes: HashMap<String, Route>, trips: HashMap<String, Trip>, nodes: HashMap<String, Node>) -> Network {
-        Network {routes: routes, trips: trips, nodes: nodes}
+    pub fn new(nodes: HashMap<String, Node>) -> Network {
+        Network {nodes: nodes}
     }
 }
