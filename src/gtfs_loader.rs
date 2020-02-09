@@ -58,9 +58,9 @@ struct Trip {
     pub block_id: Option<String>,
     pub shape_id: Option<String>,
     pub wheelchair_accessible: Option<i32>,
-    pub bikes_allowed: i32,
-    pub exceptional: i32,
-    pub trip_operation_type: i32,
+    pub bikes_allowed: Option<i32>,
+    pub exceptional: Option<i32>,
+    pub trip_operation_type: Option<i32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -179,6 +179,25 @@ fn load_trips(path: &Path) -> HashMap<String, Trip> {
         trips.insert(record.trip_id.clone(), record);
     }
     return trips;
+}
+
+#[test]
+fn trip_loading() {
+    let trips = load_trips(Path::new("test_data/"));
+    assert_eq!(trips.len(), 1);
+    let trip = trips.get("991_1411_191224").unwrap();
+    assert_eq!(trip.route_id, "L991");
+    assert_eq!(trip.service_id, "0000010-1");
+    assert_eq!(trip.trip_id, "991_1411_191224");
+    assert_eq!(trip.trip_headsign, Some(String::from("Nemocnice Motol")));
+    assert_eq!(trip.trip_short_name, None);
+    assert_eq!(trip.direction_id, 0);
+    assert_eq!(trip.block_id, None);
+    assert_eq!(trip.shape_id, Some(String::from("L991V1")));
+    assert_eq!(trip.wheelchair_accessible, Some(1));
+    assert_eq!(trip.bikes_allowed, Some(1));
+    assert_eq!(trip.exceptional, Some(0));
+    assert_eq!(trip.trip_operation_type, Some(1));
 }
 
 /// Parses a string in YYYYMMDD format into NaiveDate
