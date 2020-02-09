@@ -1,0 +1,2 @@
+route_id,agency_id,route_short_name,route_long_name,route_type,route_url,route_color,route_text_color,is_night
+L991,99,A,"Nemocnice Motol - Petřiny - Skalka - Depo Hostivař",1,"https://pid.cz/linka/A",00A562,FFFFFF,0

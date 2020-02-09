@@ -44,7 +44,7 @@ struct Route {
     pub route_url: Option<String>,
     pub route_color: Option<String>,
     pub route_text_color: Option<String>,
-    pub is_night: String,
+    pub is_night: i32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -102,7 +102,7 @@ struct ServiceException {
 /// Loads the contents of stops.txt
 /// # Arguments
 /// * path - the path to the directory stops.txt is located in
-fn load_stops(path: &Path) -> HashMap<String, Node> {
+fn load_stops(path: &Path) -> HashMap<String, Stop> {
     let mut stops = HashMap::new();
     let mut file_path_buf = path.to_path_buf();
     file_path_buf.push(Path::new("stops.txt"));
@@ -110,10 +110,27 @@ fn load_stops(path: &Path) -> HashMap<String, Node> {
     let mut rdr = csv::Reader::from_reader(file);
     for result in rdr.deserialize() {
         let record: Stop = result.unwrap();
-        let node = Node::new(record.stop_name.clone(), record.stop_lat.clone(), record.stop_lon.clone(), record.location_type.clone());
-        stops.insert(record.stop_id.clone(), node);
+        stops.insert(record.stop_id.clone(), record);
     }
     return stops;
+}
+
+#[test]
+fn stop_loading() {
+    let stops = load_stops(Path::new("test_data/"));
+    assert_eq!(1, stops.len());
+    let stop = stops.get("U50S1").unwrap();
+    assert_eq!(stop.stop_id, "U50S1");
+    assert_eq!(stop.stop_name, "Budějovická");
+    assert_eq!(stop.stop_lat, 50.04441);
+    assert_eq!(stop.stop_lon, 14.44879);
+    assert_eq!(stop.zone_id, "P");
+    assert_eq!(stop.stop_url, None);
+    assert_eq!(stop.location_type, 1);
+    assert_eq!(stop.parent_station, None);
+    assert_eq!(stop.wheelchair_boarding, Some(1));
+    assert_eq!(stop.level_id, None);
+    assert_eq!(stop.platform_code, None);
 }
 
 /// Loads the contents of routes.txt
@@ -130,6 +147,22 @@ fn load_routes(path: &Path) -> HashMap<String, Route> {
         routes.insert(record.route_id.clone(), record);
     }
     return routes;
+}
+
+#[test]
+fn route_loading() {
+    let routes = load_routes(Path::new("test_data/"));
+    assert_eq!(1, routes.len());
+    let route = routes.get("L991").unwrap();
+    assert_eq!(route.route_id, "L991");
+    assert_eq!(route.agency_id, "99");
+    assert_eq!(route.route_short_name, "A");
+    assert_eq!(route.route_long_name, "Nemocnice Motol - Petřiny - Skalka - Depo Hostivař");
+    assert_eq!(route.route_type, 1);
+    assert_eq!(route.route_url, Some(String::from("https://pid.cz/linka/A")));
+    assert_eq!(route.route_color, Some(String::from("00A562")));
+    assert_eq!(route.route_text_color, Some(String::from("FFFFFF")));
+    assert_eq!(route.is_night, 0);
 }
 
 /// Loads the contents of trips.txt
