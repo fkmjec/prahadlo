@@ -86,10 +86,29 @@ struct Service {
     pub friday: i32,
     pub saturday: i32,
     pub sunday: i32,
-    pub start_date: String, // Placeholder String
-    pub end_date: String, // Placeholder String
+    #[serde(deserialize_with = "ymd::deserialize")]
+    pub start_date: NaiveDate,
+    #[serde(deserialize_with = "ymd::deserialize")]
+    pub end_date: NaiveDate,
     #[serde(default = "Vec::new", skip_deserializing)]
     pub exceptions: Vec<ServiceException>,
+}
+
+mod ymd {
+    use chrono::{NaiveDate, NaiveTime};
+    use serde::{Deserializer, Deserialize};
+
+    /// Parses a string in YYYYMMDD format into NaiveDate
+    /// # Arguments
+    /// * raw_ymd - YYYYMMDD
+    fn parse_ymd(raw_ymd: &str) -> NaiveDate {
+        NaiveDate::from_ymd(raw_ymd[0..4].parse::<i32>().unwrap(), raw_ymd[4..6].parse::<u32>().unwrap(), raw_ymd[6..].parse::<u32>().unwrap())
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<NaiveDate, D::Error> where D: Deserializer<'de> {
+        let s: String = Deserialize::deserialize(deserializer)?;
+        Ok(parse_ymd(&s))
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -116,7 +135,7 @@ fn load_stops(path: &Path) -> HashMap<String, Stop> {
 }
 
 #[test]
-fn stop_loading() {
+fn test_stop_loading() {
     let stops = load_stops(Path::new("test_data/"));
     assert_eq!(1, stops.len());
     let stop = stops.get("U50S1").unwrap();
@@ -150,7 +169,7 @@ fn load_routes(path: &Path) -> HashMap<String, Route> {
 }
 
 #[test]
-fn route_loading() {
+fn test_route_loading() {
     let routes = load_routes(Path::new("test_data/"));
     assert_eq!(1, routes.len());
     let route = routes.get("L991").unwrap();
@@ -182,7 +201,7 @@ fn load_trips(path: &Path) -> HashMap<String, Trip> {
 }
 
 #[test]
-fn trip_loading() {
+fn test_trip_loading() {
     let trips = load_trips(Path::new("test_data/"));
     assert_eq!(trips.len(), 1);
     let trip = trips.get("991_1411_191224").unwrap();
@@ -200,12 +219,7 @@ fn trip_loading() {
     assert_eq!(trip.trip_operation_type, Some(1));
 }
 
-/// Parses a string in YYYYMMDD format into NaiveDate
-/// # Arguments
-/// * raw_ymd - YYYYMMDD
-fn parse_ymd(raw_ymd: &str) -> NaiveDate {
-    NaiveDate::from_ymd(raw_ymd[0..4].parse::<i32>().unwrap(), raw_ymd[4..6].parse::<u32>().unwrap(), raw_ymd[6..].parse::<u32>().unwrap())
-}
+
 
 /// Loads the contents of services.txt and service_dates.txt
 /// # Arguments
@@ -223,6 +237,21 @@ fn load_services(path: &Path) -> HashMap<String, Service> {
     return services;
 }
 
+#[test]
+fn test_service_loading() {
+    let services = load_services(Path::new("test_data/"));
+    assert_eq!(services.len(), 1);
+    let service = services.get("0000010-1").unwrap();
+    assert_eq!(service.monday, 0);
+    assert_eq!(service.tuesday, 0);
+    assert_eq!(service.wednesday, 0);
+    assert_eq!(service.thursday, 0);
+    assert_eq!(service.friday, 0);
+    assert_eq!(service.saturday, 1);
+    assert_eq!(service.sunday, 0);
+    assert_eq!(service.start_date, NaiveDate::from_ymd(2020, 1, 25));
+    assert_eq!(service.end_date, NaiveDate::from_ymd(2020, 2, 7))
+}
 /// Loads service exceptions from calendar_dates.txt and adds them to the HashMap
 /// # Arguments
 /// * path - the path to the gtfs directory
