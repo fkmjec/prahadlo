@@ -114,7 +114,8 @@ mod ymd {
 #[derive(Debug, Deserialize)]
 struct ServiceException {
     pub service_id: String,
-    pub date: String, // Placeholder String
+    #[serde(deserialize_with = "ymd::deserialize")]
+    pub date: NaiveDate,
     pub exception_type: i32,
 }
 
