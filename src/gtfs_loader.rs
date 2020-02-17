@@ -220,8 +220,6 @@ fn test_trip_loading() {
     assert_eq!(trip.trip_operation_type, Some(1));
 }
 
-
-
 /// Loads the contents of services.txt and service_dates.txt
 /// # Arguments
 /// * path - the path to the directory the files are located in
@@ -253,6 +251,7 @@ fn test_service_loading() {
     assert_eq!(service.start_date, NaiveDate::from_ymd(2020, 1, 25));
     assert_eq!(service.end_date, NaiveDate::from_ymd(2020, 2, 7))
 }
+
 /// Loads service exceptions from calendar_dates.txt and adds them to the HashMap
 /// # Arguments
 /// * path - the path to the gtfs directory
