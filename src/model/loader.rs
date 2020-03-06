@@ -1,122 +1,24 @@
-use crate::transport_data_structures::*;
-use std::str::FromStr;
-use std::num::ParseIntError;
-use std::path::Path;
-use std::fs::File;
-use std::io::Error as IoError;
-use std::io::ErrorKind;
-use std::collections::HashMap;
+use crate::model::data_structures::*;
 use chrono::{NaiveDate, NaiveTime};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
+use std::collections::HashMap;
+use std::fs::File;
+use std::path::Path;
 
-#[derive(Debug, Deserialize)]
-struct Agency {
-    pub agency_id: String,
-    pub agency_name: String,
-    pub agency_url: String,
-    pub agency_timezone: String,
-    pub agency_lang: String,
-    pub agency_phone: String,
+fn deserialize_ymd<'de, D>(deserializer: D) -> Result<NaiveDate, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: String = Deserialize::deserialize(deserializer)?;
+    Ok(NaiveDate::parse_from_str(&s, "%Y%m%d").unwrap())
 }
 
-#[derive(Debug, Deserialize)]
-struct Stop {
-    pub stop_id: String,
-    pub stop_name: String,
-    pub stop_lat: f32,
-    pub stop_lon: f32,
-    pub zone_id: String,
-    pub stop_url: Option<String>,
-    pub location_type: i32,
-    pub parent_station: Option<String>,
-    pub wheelchair_boarding: Option<i32>,
-    pub level_id: Option<i32>,
-    pub platform_code: Option<i32>,
-}
-
-#[derive(Debug, Deserialize)]
-struct Route {
-    pub route_id: String,
-    pub agency_id: String,
-    pub route_short_name: String,
-    pub route_long_name: String,
-    pub route_type: i32,
-    pub route_url: Option<String>,
-    pub route_color: Option<String>,
-    pub route_text_color: Option<String>,
-    pub is_night: i32,
-}
-
-#[derive(Debug, Deserialize)]
-struct Trip {
-    pub route_id: String,
-    pub service_id: String,
-    pub trip_id: String,
-    pub trip_headsign: Option<String>,
-    pub trip_short_name: Option<String>,
-    pub direction_id: i32,
-    pub block_id: Option<String>,
-    pub shape_id: Option<String>,
-    pub wheelchair_accessible: Option<i32>,
-    pub bikes_allowed: Option<i32>,
-    pub exceptional: Option<i32>,
-    pub trip_operation_type: Option<i32>,
-}
-
-#[derive(Debug, Deserialize)]
-struct StopTime {
-    pub trip_id: String,
-    pub arrival_time: NaiveTime,
-    pub departure_time: NaiveTime,
-    pub stop_id: String,
-    pub stop_sequence: i32,
-    pub stop_headsign: Option<String>,
-    pub pickup_type: i32,
-    pub drop_off_type: i32,
-    pub shape_dist_travelled: i32,
-}
-
-#[derive(Debug, Deserialize)]
-struct Service {
-    pub service_id: String, 
-    pub monday: i32,
-    pub tuesday:i32,
-    pub wednesday: i32,
-    pub thursday: i32,
-    pub friday: i32,
-    pub saturday: i32,
-    pub sunday: i32,
-    #[serde(deserialize_with = "ymd::deserialize")]
-    pub start_date: NaiveDate,
-    #[serde(deserialize_with = "ymd::deserialize")]
-    pub end_date: NaiveDate,
-    #[serde(default = "Vec::new", skip_deserializing)]
-    pub exceptions: Vec<ServiceException>,
-}
-
-mod ymd {
-    use chrono::{NaiveDate, NaiveTime};
-    use serde::{Deserializer, Deserialize};
-
-    /// Parses a string in YYYYMMDD format into NaiveDate
-    /// # Arguments
-    /// * raw_ymd - YYYYMMDD
-    fn parse_ymd(raw_ymd: &str) -> NaiveDate {
-        NaiveDate::from_ymd(raw_ymd[0..4].parse::<i32>().unwrap(), raw_ymd[4..6].parse::<u32>().unwrap(), raw_ymd[6..].parse::<u32>().unwrap())
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<NaiveDate, D::Error> where D: Deserializer<'de> {
-        let s: String = Deserialize::deserialize(deserializer)?;
-        Ok(parse_ymd(&s))
-    }
-}
-
-#[derive(Debug, Deserialize)]
-struct ServiceException {
-    pub service_id: String,
-    #[serde(deserialize_with = "ymd::deserialize")]
-    pub date: NaiveDate,
-    pub exception_type: i32,
+fn deserialize_time<'de, D>(deserializer: D) -> Result<NaiveTime, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: String = Deserialize::deserialize(deserializer)?;
+    Ok(NaiveTime::parse_from_str(&s, "%H:%M:%S").unwrap())
 }
 
 /// Loads the contents of stops.txt
@@ -177,9 +79,15 @@ fn test_route_loading() {
     assert_eq!(route.route_id, "L991");
     assert_eq!(route.agency_id, "99");
     assert_eq!(route.route_short_name, "A");
-    assert_eq!(route.route_long_name, "Nemocnice Motol - Petřiny - Skalka - Depo Hostivař");
+    assert_eq!(
+        route.route_long_name,
+        "Nemocnice Motol - Petřiny - Skalka - Depo Hostivař"
+    );
     assert_eq!(route.route_type, 1);
-    assert_eq!(route.route_url, Some(String::from("https://pid.cz/linka/A")));
+    assert_eq!(
+        route.route_url,
+        Some(String::from("https://pid.cz/linka/A"))
+    );
     assert_eq!(route.route_color, Some(String::from("00A562")));
     assert_eq!(route.route_text_color, Some(String::from("FFFFFF")));
     assert_eq!(route.is_night, 0);
@@ -263,29 +171,66 @@ fn load_service_exceptions(path: &Path, services: &mut HashMap<String, Service>)
     let mut rdr = csv::Reader::from_reader(file);
     for result in rdr.deserialize() {
         let record: ServiceException = result.unwrap();
-        services.get_mut(&record.service_id).unwrap().exceptions.push(record);
+        services
+            .get_mut(&record.service_id)
+            .unwrap()
+            .exceptions
+            .push(record);
     }
 }
 
-/// Creates the edges to be used in the inner workings of the search algorithm
-/// # Arguments
-/// * path - the path to the gtfs directory
-/// * stops - loaded contents of stops.txt
-/// * routes - loaded contents of routes.txt
-/// * trips - loaded contents of trips.txt
-/// * services - loaded contents of services.txt and service_dates.txt, specifying the dates
-/// the service is available on
-fn fill_edges(path: &Path, stops: &mut HashMap<String, Node>, routes: &HashMap<String, Route>, trips: &HashMap<String, Trip>, services: &HashMap<String, Service>) {
+fn load_stop_times(path: &Path, trips: &mut HashMap<String, Trip>) {
     let mut file_path_buf = path.to_path_buf();
-    file_path_buf.push(Path::new("calendar_dates.txt"));
-    let file = File::open(file_path_buf.as_path()).unwrap(); // No need for error handling, if this fails, we want to panic
+    file_path_buf.push(Path::new("stop_times.txt"));
+    let file = File::open(file_path_buf.as_path()).unwrap();
     let mut rdr = csv::Reader::from_reader(file);
-    for result in rdr.records() {
-
-    } 
+    for result in rdr.deserialize() {
+        let stop_time: StopTime = result.unwrap();
+        trips
+            .get_mut(&stop_time.trip_id)
+            .unwrap()
+            .stop_times
+            .push(stop_time);
+    }
+    for trip in trips.values_mut() {
+        trip.stop_times
+            .sort_by(|a, b| a.stop_sequence.cmp(&b.stop_sequence));
+    }
 }
 
 pub fn load_transport_network(path: &Path) -> Network {
-    // TODO load individual GTFS files 
-    Network::new(HashMap::new())
-} 
+    let mut stops = load_stops(path);
+    let routes = load_routes(path);
+    let mut services = load_services(path);
+    load_service_exceptions(path, &mut services);
+    let mut trips = load_trips(path);
+    load_stop_times(path, &mut trips);
+    let mut nodes: Vec<Node> = Vec::new();
+    let mut current_node_index: usize = 0;
+    for trip in trips.values() {
+        for i in 1..trip.stop_times.len() {
+            let mut dep_node = Node::new(
+                trip.stop_times[i - 1].stop_id.clone(),
+                NodeKind::Dep(trip.stop_times[i - 1].departure_time.clone()),
+            );
+            let route = routes.get(trip.route_id.as_str()).unwrap();
+            dep_node.add_edge(Edge::new(
+                trip.stop_times[i - 1].departure_time.clone(),
+                trip.stop_times[i].arrival_time.clone(),
+                Some(trip.trip_id.clone()),
+                route.route_type,
+                current_node_index + 1,
+            ));
+            nodes.push(dep_node);
+            let stop = stops.get_mut(&trip.stop_times[i - 1].stop_id).unwrap();
+            stop.departure_nodes.push(current_node_index);
+            let arr_node = Node::new(
+                trip.stop_times[i].stop_id.clone(),
+                NodeKind::Arr(trip.stop_times[i].arrival_time.clone()),
+            );
+            current_node_index += 1;
+            nodes.push(arr_node);
+        }
+    }
+    return Network::new(nodes);
+}
