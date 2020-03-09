@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, NaiveTime};
+use chrono::NaiveDate;
 use serde::{de, de::Unexpected, Deserialize, Deserializer};
 use std::collections::HashMap;
 
@@ -25,6 +25,7 @@ pub struct Stop {
     pub wheelchair_boarding: Option<i32>,
     pub level_id: Option<String>,
     pub platform_code: Option<String>,
+    #[serde(default = "Vec::new", skip_deserializing)]
     pub departure_nodes: Vec<usize>,
 }
 
@@ -65,15 +66,17 @@ pub struct Trip {
 pub struct StopTime {
     pub trip_id: String,
     #[serde(deserialize_with = "deserialize_time")]
-    pub arrival_time: NaiveTime,
+    // time of the day in seconds
+    pub arrival_time: u32,
     #[serde(deserialize_with = "deserialize_time")]
-    pub departure_time: NaiveTime,
+    // time of the day in seconds
+    pub departure_time: u32,
     pub stop_id: String,
     pub stop_sequence: u32,
     pub stop_headsign: Option<String>,
     pub pickup_type: u8,
     pub drop_off_type: u8,
-    pub shape_dist_travelled: f32,
+    pub shape_dist_travelled: Option<f32>,
 }
 
 fn deserialize_ymd<'de, D>(deserializer: D) -> Result<NaiveDate, D::Error>
@@ -84,12 +87,13 @@ where
     Ok(NaiveDate::parse_from_str(&s, "%Y%m%d").unwrap())
 }
 
-fn deserialize_time<'de, D>(deserializer: D) -> Result<NaiveTime, D::Error>
+fn deserialize_time<'de, D>(deserializer: D) -> Result<u32, D::Error>
 where
     D: Deserializer<'de>,
 {
     let s: String = Deserialize::deserialize(deserializer)?;
-    Ok(NaiveTime::parse_from_str(&s, "%H:%M:%S").unwrap())
+    let hms: Vec<u32> = s.split(":").map(|x| x.parse::<u32>().unwrap()).collect();
+    return Ok(3600 * hms[0] + 60 * hms[1] + hms[2]);
 }
 
 fn bool_from_int<'de, D>(deserializer: D) -> Result<bool, D::Error>
@@ -139,13 +143,13 @@ pub struct ServiceException {
     pub exception_type: u8,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NodeKind {
-    Arr(NaiveTime),
-    Dep(NaiveTime),
+    Arr(u32),
+    Dep(u32),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Node {
     stop_id: String,
     node_kind: NodeKind,
@@ -166,10 +170,10 @@ impl Node {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Edge {
-    departs_at: NaiveTime,
-    arrives_at: NaiveTime,
+    departs_at: u32,
+    arrives_at: u32,
     trip_id: Option<String>,
     mean: u32, // TODO replace with an enum
     target_node: usize,
@@ -177,8 +181,8 @@ pub struct Edge {
 
 impl Edge {
     pub fn new(
-        departs_at: NaiveTime,
-        arrives_at: NaiveTime,
+        departs_at: u32,
+        arrives_at: u32,
         trip_id: Option<String>,
         mean: u32,
         target_node: usize,
@@ -193,17 +197,14 @@ impl Edge {
     }
 
     /// returns the cost of the edge in seconds
-    fn cost(&self) -> u64 {
-        return *(&self
-            .arrives_at
-            .signed_duration_since(self.departs_at)
-            .num_seconds()) as u64;
+    pub fn cost(&self) -> u32 {
+        return &self.arrives_at - &self.departs_at;
     }
 }
 
 #[derive(Debug)]
 pub struct Network {
-    nodes: Vec<Node>,
+    pub nodes: Vec<Node>,
 }
 
 impl Network {

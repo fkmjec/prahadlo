@@ -1,25 +1,9 @@
 use crate::model::data_structures::*;
-use chrono::{NaiveDate, NaiveTime};
+use chrono::NaiveDate;
 use serde::{Deserialize, Deserializer};
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
-
-fn deserialize_ymd<'de, D>(deserializer: D) -> Result<NaiveDate, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: String = Deserialize::deserialize(deserializer)?;
-    Ok(NaiveDate::parse_from_str(&s, "%Y%m%d").unwrap())
-}
-
-fn deserialize_time<'de, D>(deserializer: D) -> Result<NaiveTime, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: String = Deserialize::deserialize(deserializer)?;
-    Ok(NaiveTime::parse_from_str(&s, "%H:%M:%S").unwrap())
-}
 
 /// Loads the contents of stops.txt
 /// # Arguments
@@ -228,7 +212,7 @@ pub fn load_transport_network(path: &Path) -> Network {
                 trip.stop_times[i].stop_id.clone(),
                 NodeKind::Arr(trip.stop_times[i].arrival_time.clone()),
             );
-            current_node_index += 1;
+            current_node_index += 2;
             nodes.push(arr_node);
         }
     }
