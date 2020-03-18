@@ -2,6 +2,8 @@ use chrono::NaiveDate;
 use serde::{de, de::Unexpected, Deserialize, Deserializer};
 use std::collections::HashMap;
 
+pub static MINIMAL_TRANSFER_TIME: u32 = 60;
+
 #[derive(Debug, Deserialize)]
 pub struct Agency {
     pub agency_id: String,
@@ -26,7 +28,74 @@ pub struct Stop {
     pub level_id: Option<String>,
     pub platform_code: Option<String>,
     #[serde(default = "Vec::new", skip_deserializing)]
-    pub departure_nodes: Vec<usize>,
+    departure_nodes: Vec<usize>,
+    #[serde(default = "Stop::default_state", skip_deserializing)]
+    finalized: bool,
+}
+
+impl Stop {
+    pub fn default_state() -> bool {
+        false
+    }
+
+    pub fn get_dep_node(&self, index: usize) -> usize {
+        self.departure_nodes[index]
+    }
+
+    pub fn add_dep_node(&mut self, dep_node: usize) -> Result<(), &str> {
+        if !self.finalized {
+            &self.departure_nodes.push(dep_node);
+            Ok(())
+        } else {
+            Err("Tried to add a new departure node to an already finalized Stop.")
+        }
+    }
+
+    pub fn dep_node_count(&self) -> usize {
+        self.departure_nodes.len()
+    }
+
+    /// Adds the departure transfer chain, locks the departure nodes
+    pub fn finalize(&mut self, nodes: &mut Vec<Node>) {
+        self.departure_nodes
+            .sort_by(|a, b| nodes[*a].get_time().cmp(&nodes[*b].get_time()));
+        if self.dep_node_count() >= 2 {
+            for index in 0..self.dep_node_count() - 2 {
+                let dep = self.get_dep_node(index);
+                let dep_time = nodes[dep].get_time();
+                let arr = self.get_dep_node(index + 1);
+                let arr_time = nodes[arr].get_time();
+                nodes[dep].add_edge(Edge::new(dep_time, arr_time, None, arr));
+            }
+        }
+        self.finalized = true;
+    }
+
+    pub fn get_earliest_dep(
+        &self,
+        arr_time: u32,
+        nodes: &Vec<Node>,
+    ) -> Result<Option<usize>, &str> {
+        if self.finalized {
+            let mut l: i32 = 0;
+            let mut r = self.dep_node_count() as i32 - 1;
+            let mut best = None;
+            while l <= r {
+                let middle = (l + r) / 2;
+                let addr = self.get_dep_node(middle as usize);
+                if nodes[addr].get_time() >= arr_time {
+                    best = Some(addr);
+                    r = middle - 1;
+                }
+                if nodes[self.get_dep_node(middle as usize)].get_time() < arr_time {
+                    l = middle + 1;
+                }
+            }
+            Ok(best)
+        } else {
+            Err("Trying to get earliest next departure on a Stop that is not finalized.")
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -50,8 +119,7 @@ pub struct Trip {
     pub trip_id: String,
     pub trip_headsign: Option<String>,
     pub trip_short_name: Option<String>,
-    #[serde(deserialize_with = "bool_from_int")]
-    pub direction_id: bool,
+    pub direction_id: u8,
     pub block_id: Option<String>,
     pub shape_id: Option<String>,
     pub wheelchair_accessible: Option<u8>,
@@ -145,28 +213,34 @@ pub struct ServiceException {
 
 #[derive(Debug, Clone)]
 pub enum NodeKind {
-    Arr(u32),
-    Dep(u32),
+    Arr,
+    Dep,
 }
 
 #[derive(Debug, Clone)]
 pub struct Node {
-    stop_id: String,
+    pub stop_id: String,
     node_kind: NodeKind,
+    time: u32,
     edges: Vec<Edge>,
 }
 
 impl Node {
-    pub fn new(stop_id: String, node_kind: NodeKind) -> Node {
+    pub fn new(stop_id: String, node_kind: NodeKind, time: u32) -> Node {
         Node {
             stop_id: stop_id,
             node_kind: node_kind,
+            time: time,
             edges: Vec::new(),
         }
     }
 
     pub fn add_edge(&mut self, edge: Edge) {
         &self.edges.push(edge);
+    }
+
+    pub fn get_time(&self) -> u32 {
+        self.time
     }
 }
 
@@ -175,7 +249,6 @@ pub struct Edge {
     departs_at: u32,
     arrives_at: u32,
     trip_id: Option<String>,
-    mean: u32, // TODO replace with an enum
     target_node: usize,
 }
 
@@ -184,14 +257,12 @@ impl Edge {
         departs_at: u32,
         arrives_at: u32,
         trip_id: Option<String>,
-        mean: u32,
         target_node: usize,
     ) -> Edge {
         Edge {
             departs_at: departs_at,
             arrives_at: arrives_at,
             trip_id: trip_id,
-            mean: mean,
             target_node: target_node,
         }
     }
@@ -204,11 +275,27 @@ impl Edge {
 
 #[derive(Debug)]
 pub struct Network {
-    pub nodes: Vec<Node>,
+    stops: HashMap<String, Stop>,
+    routes: HashMap<String, Route>,
+    trips: HashMap<String, Trip>,
+    services: HashMap<String, Service>,
+    nodes: Vec<Node>,
 }
 
 impl Network {
-    pub fn new(nodes: Vec<Node>) -> Network {
-        Network { nodes: nodes }
+    pub fn new(
+        stops: HashMap<String, Stop>,
+        routes: HashMap<String, Route>,
+        trips: HashMap<String, Trip>,
+        services: HashMap<String, Service>,
+        nodes: Vec<Node>,
+    ) -> Network {
+        Network {
+            stops: stops,
+            routes: routes,
+            trips: trips,
+            services: services,
+            nodes: nodes,
+        }
     }
 }

@@ -1,6 +1,5 @@
 use crate::model::data_structures::*;
 use chrono::NaiveDate;
-use serde::{Deserialize, Deserializer};
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
@@ -74,7 +73,7 @@ fn test_route_loading() {
     );
     assert_eq!(route.route_color, Some(String::from("00A562")));
     assert_eq!(route.route_text_color, Some(String::from("FFFFFF")));
-    assert_eq!(route.is_night, 0);
+    assert_eq!(route.is_night, false);
 }
 
 /// Loads the contents of trips.txt
@@ -133,13 +132,13 @@ fn test_service_loading() {
     let services = load_services(Path::new("test_data/"));
     assert_eq!(services.len(), 1);
     let service = services.get("0000010-1").unwrap();
-    assert_eq!(service.monday, 0);
-    assert_eq!(service.tuesday, 0);
-    assert_eq!(service.wednesday, 0);
-    assert_eq!(service.thursday, 0);
-    assert_eq!(service.friday, 0);
-    assert_eq!(service.saturday, 1);
-    assert_eq!(service.sunday, 0);
+    assert_eq!(service.monday, false);
+    assert_eq!(service.tuesday, false);
+    assert_eq!(service.wednesday, false);
+    assert_eq!(service.thursday, false);
+    assert_eq!(service.friday, false);
+    assert_eq!(service.saturday, true);
+    assert_eq!(service.sunday, false);
     assert_eq!(service.start_date, NaiveDate::from_ymd(2020, 1, 25));
     assert_eq!(service.end_date, NaiveDate::from_ymd(2020, 2, 7))
 }
@@ -190,31 +189,55 @@ pub fn load_transport_network(path: &Path) -> Network {
     let mut trips = load_trips(path);
     load_stop_times(path, &mut trips);
     let mut nodes: Vec<Node> = Vec::new();
+    let mut arrival_nodes: Vec<usize> = Vec::new();
     let mut current_node_index: usize = 0;
     for trip in trips.values() {
         for i in 1..trip.stop_times.len() {
             let mut dep_node = Node::new(
                 trip.stop_times[i - 1].stop_id.clone(),
-                NodeKind::Dep(trip.stop_times[i - 1].departure_time.clone()),
+                NodeKind::Dep,
+                trip.stop_times[i - 1].departure_time,
             );
             let route = routes.get(trip.route_id.as_str()).unwrap();
             dep_node.add_edge(Edge::new(
-                trip.stop_times[i - 1].departure_time.clone(),
-                trip.stop_times[i].arrival_time.clone(),
+                trip.stop_times[i - 1].departure_time,
+                trip.stop_times[i].arrival_time,
                 Some(trip.trip_id.clone()),
-                route.route_type,
                 current_node_index + 1,
             ));
             nodes.push(dep_node);
             let stop = stops.get_mut(&trip.stop_times[i - 1].stop_id).unwrap();
-            stop.departure_nodes.push(current_node_index);
+            stop.add_dep_node(current_node_index);
+            current_node_index += 1;
             let arr_node = Node::new(
                 trip.stop_times[i].stop_id.clone(),
-                NodeKind::Arr(trip.stop_times[i].arrival_time.clone()),
+                NodeKind::Arr,
+                trip.stop_times[i].arrival_time.clone(),
             );
-            current_node_index += 2;
+            arrival_nodes.push(current_node_index);
             nodes.push(arr_node);
+            current_node_index += 1;
         }
     }
-    return Network::new(nodes);
+    println!("Finalizing stops...");
+    for stop in stops.values_mut() {
+        stop.finalize(&mut nodes);
+    }
+    println!("Adding edges between arrival and departure nodes...");
+    for arr_node in arrival_nodes {
+        let time = nodes[arr_node].get_time();
+        let earliest_dep = stops
+            .get(&nodes[arr_node].stop_id)
+            .unwrap()
+            .get_earliest_dep(time, &nodes)
+            .unwrap();
+        match earliest_dep {
+            Some(dep) => {
+                nodes[arr_node].add_edge(Edge::new(time, time + MINIMAL_TRANSFER_TIME, None, dep))
+            }
+            None => (),
+        };
+    }
+
+    return Network::new(stops, routes, trips, services, nodes);
 }
