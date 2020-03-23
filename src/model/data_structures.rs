@@ -1,6 +1,7 @@
 use chrono::NaiveDate;
+use core::cmp::Ordering;
 use serde::{de, de::Unexpected, Deserialize, Deserializer};
-use std::collections::HashMap;
+use std::collections::{BinaryHeap, HashMap};
 
 pub static MINIMAL_TRANSFER_TIME: u32 = 60;
 
@@ -65,7 +66,8 @@ impl Stop {
                 let dep_time = nodes[dep].get_time();
                 let arr = self.get_dep_node(index + 1);
                 let arr_time = nodes[arr].get_time();
-                nodes[dep].add_edge(Edge::new(dep_time, arr_time, None, arr));
+                nodes[dep]
+                    .add_edge(Edge::new(dep_time, arr_time, None, arr));
             }
         }
         self.finalized = true;
@@ -220,27 +222,53 @@ pub enum NodeKind {
 #[derive(Debug, Clone)]
 pub struct Node {
     pub stop_id: String,
+    pub node_id: usize,
     node_kind: NodeKind,
     time: u32,
     edges: Vec<Edge>,
 }
 
 impl Node {
-    pub fn new(stop_id: String, node_kind: NodeKind, time: u32) -> Node {
+    pub fn new(stop_id: String, node_id: usize, node_kind: NodeKind, time: u32) -> Node {
         Node {
             stop_id: stop_id,
+            node_id: node_id,
             node_kind: node_kind,
             time: time,
             edges: Vec::new(),
         }
     }
 
+    pub fn get_time(&self) -> u32 {
+        self.time
+    }
+
+    pub fn get_edges(&self) -> &Vec<Edge> {
+        &self.edges
+    }
+
     pub fn add_edge(&mut self, edge: Edge) {
         &self.edges.push(edge);
     }
+}
 
-    pub fn get_time(&self) -> u32 {
-        self.time
+impl Eq for Node {}
+
+impl PartialEq for Node {
+    fn eq(&self, other: &Node) -> bool {
+        self.node_id == other.node_id
+    }
+}
+
+impl Ord for Node {
+    fn cmp(&self, other: &Node) -> Ordering {
+        other.get_time().cmp(&self.get_time())
+    }
+}
+
+impl PartialOrd for Node {
+    fn partial_cmp(&self, other: &Node) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -249,7 +277,7 @@ pub struct Edge {
     departs_at: u32,
     arrives_at: u32,
     trip_id: Option<String>,
-    target_node: usize,
+    pub target_node: usize,
 }
 
 impl Edge {
@@ -297,5 +325,36 @@ impl Network {
             services: services,
             nodes: nodes,
         }
+    }
+
+    pub fn find_connection(
+        &self,
+        dep_stop_id: &str,
+        target_stop_id: &str,
+        time: u32,
+    ) -> Result<Option<u32>, &str> {
+        let mut dists = vec![-1; self.nodes.len()];
+        let mut heap = BinaryHeap::new();
+        let start = self
+            .stops
+            .get(dep_stop_id)
+            .ok_or("Stop not found.")?
+            .get_earliest_dep(time, &self.nodes)?
+            .ok_or("There is no departure from the stop after the selected time")?;
+        dists[start] = time as i32;
+        heap.push(self.nodes[start].clone());
+
+        while let Some(popped) = heap.pop() {
+            if popped.stop_id.as_str() == target_stop_id {
+                return Ok(Some(popped.get_time() - time));
+            }
+            for edge in popped.get_edges() {
+                if dists[edge.target_node] == -1 {
+                    heap.push(self.nodes[edge.target_node].clone());
+                }
+            }
+            dists[popped.node_id] = popped.get_time() as i32;
+        }
+        return Ok(None);
     }
 }

@@ -195,6 +195,7 @@ pub fn load_transport_network(path: &Path) -> Network {
         for i in 1..trip.stop_times.len() {
             let mut dep_node = Node::new(
                 trip.stop_times[i - 1].stop_id.clone(),
+                current_node_index,
                 NodeKind::Dep,
                 trip.stop_times[i - 1].departure_time,
             );
@@ -211,6 +212,7 @@ pub fn load_transport_network(path: &Path) -> Network {
             current_node_index += 1;
             let arr_node = Node::new(
                 trip.stop_times[i].stop_id.clone(),
+                current_node_index,
                 NodeKind::Arr,
                 trip.stop_times[i].arrival_time.clone(),
             );
