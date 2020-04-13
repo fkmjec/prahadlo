@@ -1,7 +1,6 @@
 use crate::model::data_structures::primitive_gtfs::*;
-use chrono::NaiveDate;
 use core::cmp::Ordering;
-use serde::{de, de::Unexpected, Deserialize, Deserializer};
+use serde::Deserialize;
 use std::collections::{BinaryHeap, HashMap};
 
 pub static MINIMAL_TRANSFER_TIME: u32 = 60;
@@ -57,8 +56,7 @@ impl Stop {
                 let dep_time = nodes[dep].get_time();
                 let arr = self.get_dep_node(index + 1);
                 let arr_time = nodes[arr].get_time();
-                nodes[dep]
-                    .add_edge(Edge::new(dep_time, arr_time, None, arr));
+                nodes[dep].add_edge(Edge::new(dep_time, arr_time, None, arr));
             }
         }
         self.finalized = true;

@@ -1,8 +1,15 @@
 use crate::model::data_structures::*;
-use chrono::NaiveDate;
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
+
+use chrono::NaiveDate;
+use geo_types::Point;
+use proj::Proj;
+
+const MAX_PEDESTRIAN_DIST: f32 = 200.0;
+const PEDESTRIAN_SPEED: f32 = 3.6;
+const BASE_PEDESTRIAN_TRANSFER_TIME: f32 = 60.0;
 
 /// Loads the contents of stops.txt
 /// # Arguments
@@ -181,6 +188,82 @@ fn load_stop_times(path: &Path, trips: &mut HashMap<String, Trip>) {
     }
 }
 
+/// Converts stop coordinates in WGS84 to UTM coordinates in zone 33U
+fn get_stop_coords_in_utm(stops: &HashMap<String, Stop>) -> HashMap<String, Point<f32>> {
+    let mut stop_coords: HashMap<String, Point<f32>> = HashMap::new();
+    for (stop_id, stop) in stops {
+        let from = "EPSG:4326";
+        let to = "EPSG:32633";
+        let wsg_to_utm = Proj::new_known_crs(&from, &to, None).unwrap();
+        let wsg_coords = Point::new(stop.stop_lon, stop.stop_lat);
+        let coords = wsg_to_utm.convert(wsg_coords).unwrap();
+        stop_coords.insert(stop_id.clone(), coords);
+    }
+    return stop_coords;
+}
+
+/// Takes stop coords in utm and a maximum connections distance. Divides the stops into squares of
+/// size max_connection_dist * max_connection_dist.
+fn calculate_proximity_squares(
+    utm_coords: &HashMap<String, Point<f32>>,
+    max_connection_dist: f32,
+) -> HashMap<(i32, i32), Vec<String>> {
+    let mut squares: HashMap<(i32, i32), Vec<String>> = HashMap::new();
+    for (stop_id, utm) in utm_coords {
+        let square_coords = (
+            (utm.x() / max_connection_dist) as i32,
+            (utm.y() / max_connection_dist) as i32,
+        );
+        if squares.contains_key(&square_coords) {
+            squares
+                .get_mut(&square_coords)
+                .unwrap()
+                .push(String::from(stop_id));
+        } else {
+            squares.insert(square_coords, vec![String::from(stop_id)]);
+        }
+    }
+    return squares;
+}
+
+/// Takes squares of sizes max_conn_dist times max_conn_dist that contain stops in utm coordinates,
+/// and it efficiently computes connections between stops closer than max_conn_dist. (efficiently means faster than
+/// O(N^2) N being the number of all stops.
+fn get_pedestrian_connections(
+    utm_coords: &HashMap<String, Point<f32>>,
+    squares: &HashMap<(i32, i32), Vec<String>>,
+    max_conn_dist: f32,
+) -> HashMap<String, Vec<(String, f32)>> {
+    let mut connections: HashMap<String, Vec<(String, f32)>> = HashMap::new();
+    for ((x, y), stop_ids) in squares {
+        for stop_id in stop_ids {
+            let coord = utm_coords.get(stop_id).unwrap();
+            for dx in -1..2 {
+                for dy in -1..2 {
+                    if let Some(near_stop_ids) = squares.get(&(x + dx, y + dy)) {
+                        for near_id in near_stop_ids {
+                            let near_coord = utm_coords.get(near_id).unwrap();
+                            let distance = (coord.x() - near_coord.x()).abs()
+                                + (coord.y() - near_coord.y()).abs();
+                            if (distance <= max_conn_dist) {
+                                if let Some(connection) = connections.get_mut(stop_id) {
+                                    connection.push((String::from(near_id), distance));
+                                } else {
+                                    connections.insert(
+                                        String::from(stop_id),
+                                        vec![(String::from(near_id), distance)],
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return connections;
+}
+
 pub fn load_transport_network(path: &Path) -> Network {
     let mut stops = load_stops(path);
     let routes = load_routes(path);
@@ -199,7 +282,6 @@ pub fn load_transport_network(path: &Path) -> Network {
                 NodeKind::Dep,
                 trip.stop_times[i - 1].departure_time,
             );
-            let route = routes.get(trip.route_id.as_str()).unwrap();
             dep_node.add_edge(Edge::new(
                 trip.stop_times[i - 1].departure_time,
                 trip.stop_times[i].arrival_time,
@@ -221,24 +303,55 @@ pub fn load_transport_network(path: &Path) -> Network {
             current_node_index += 1;
         }
     }
+
     println!("Finalizing stops...");
     for stop in stops.values_mut() {
         stop.finalize(&mut nodes);
     }
+
+    println!("Calculating pedestrian connections...");
+    let utm_coords = get_stop_coords_in_utm(&stops);
+    let squares = calculate_proximity_squares(&utm_coords, MAX_PEDESTRIAN_DIST);
+    let connections = get_pedestrian_connections(&utm_coords, &squares, MAX_PEDESTRIAN_DIST);
+
     println!("Adding edges between arrival and departure nodes...");
     for arr_node in arrival_nodes {
-        let time = nodes[arr_node].get_time();
-        let earliest_dep = stops
+        let arr_time = nodes[arr_node].get_time();
+        if let Some(dep) = stops
             .get(&nodes[arr_node].stop_id)
             .unwrap()
-            .get_earliest_dep(time, &nodes)
-            .unwrap();
-        match earliest_dep {
-            Some(dep) => {
-                nodes[arr_node].add_edge(Edge::new(time, time + MINIMAL_TRANSFER_TIME, None, dep))
+            .get_earliest_dep(arr_time + MINIMAL_TRANSFER_TIME, &nodes)
+            .unwrap()
+        {
+            nodes[arr_node].add_edge(Edge::new(
+                arr_time,
+                arr_time + MINIMAL_TRANSFER_TIME,
+                None,
+                dep,
+            ))
+        }
+        if let Some(conn_arr) = connections.get(&nodes[arr_node].stop_id) {
+            for conn in conn_arr {
+                let node_index = nodes.len();
+                let cost =
+                    (BASE_PEDESTRIAN_TRANSFER_TIME + conn.1 / PEDESTRIAN_SPEED).round() as u32;
+                let new_arr_node =
+                    Node::new(conn.0.clone(), node_index, NodeKind::Arr, arr_time + cost);
+                if let Some(dep) = stops
+                    .get(&conn.0)
+                    .unwrap()
+                    .get_earliest_dep(arr_time + cost + MINIMAL_TRANSFER_TIME, &nodes)
+                    .unwrap()
+                {
+                    nodes[arr_node].add_edge(Edge::new(
+                        arr_time + cost,
+                        arr_time + cost + MINIMAL_TRANSFER_TIME,
+                        None,
+                        dep,
+                    ))
+                }
             }
-            None => (),
-        };
+        }
     }
 
     return Network::new(stops, routes, trips, services, nodes);

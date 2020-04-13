@@ -1,5 +1,5 @@
-use serde::{de, de::Unexpected, Deserialize, Deserializer};
 use chrono::NaiveDate;
+use serde::{de, de::Unexpected, Deserialize, Deserializer};
 
 #[derive(Debug, Deserialize)]
 pub struct Agency {
