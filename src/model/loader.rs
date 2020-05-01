@@ -7,7 +7,7 @@ use chrono::NaiveDate;
 use geo_types::Point;
 use proj::Proj;
 
-const MAX_PEDESTRIAN_DIST: f32 = 200.0;
+const MAX_PEDESTRIAN_DIST: f32 = 500.0;
 const PEDESTRIAN_SPEED: f32 = 3.6;
 const BASE_PEDESTRIAN_TRANSFER_TIME: f32 = 60.0;
 

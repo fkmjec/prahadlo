@@ -3,7 +3,7 @@ use core::cmp::Ordering;
 use serde::Deserialize;
 use std::collections::{BinaryHeap, HashMap};
 
-pub static MINIMAL_TRANSFER_TIME: u32 = 60;
+pub static MINIMAL_TRANSFER_TIME: u32 = 0;
 
 #[derive(Debug, Deserialize)]
 pub struct Stop {
@@ -210,6 +210,7 @@ impl Network {
         time: u32,
     ) -> Result<Option<u32>, &str> {
         let mut dists = vec![-1; self.nodes.len()];
+        let mut came_from: Vec<i32> = vec![-1; self.nodes.len()];
         let mut heap = BinaryHeap::new();
         let start = self
             .stops
@@ -218,18 +219,27 @@ impl Network {
             .get_earliest_dep(time, &self.nodes)?
             .ok_or("There is no departure from the stop after the selected time")?;
         dists[start] = time as i32;
-        heap.push(self.nodes[start].clone());
+        heap.push(start);
 
         while let Some(popped) = heap.pop() {
-            if popped.stop_id.as_str() == target_stop_id {
-                return Ok(Some(popped.get_time() - time));
+            println!("POPPED! {:?}", self.nodes[popped]);
+            let node_struct = &self.nodes[popped];
+            if node_struct.stop_id.as_str() == target_stop_id {
+                let mut index = popped;
+                while came_from[index] != -1 {
+                    println!("{:?}", self.nodes[index]);
+                    index = came_from[index] as usize;
+                }
+                return Ok(Some(node_struct.get_time() - time));
             }
-            for edge in popped.get_edges() {
-                if dists[edge.target_node] == -1 {
-                    heap.push(self.nodes[edge.target_node].clone());
+            for edge in node_struct.get_edges() {
+                if dists[edge.target_node] == -1 || ((node_struct.get_time() + edge.cost()) as i32) < dists[edge.target_node] {
+                    heap.push(edge.target_node); // TODO solve this inefficient bullcrap
+                    dists[edge.target_node] = (node_struct.get_time() + edge.cost()) as i32;
+                    came_from[edge.target_node] = popped as i32;
                 }
             }
-            dists[popped.node_id] = popped.get_time() as i32;
+            dists[popped] = node_struct.get_time() as i32;
         }
         return Ok(None);
     }
