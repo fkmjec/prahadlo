@@ -1,6 +1,8 @@
 use chrono::NaiveDate;
 use serde::{de, de::Unexpected, Deserialize, Deserializer};
 
+// This file contains primitive GTFS structures to be loaded using Serde.
+
 #[derive(Debug, Deserialize)]
 pub struct Agency {
     pub agency_id: String,

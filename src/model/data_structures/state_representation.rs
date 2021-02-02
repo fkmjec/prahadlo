@@ -3,8 +3,12 @@ use core::cmp::Ordering;
 use serde::Deserialize;
 use std::collections::{BinaryHeap, HashMap};
 
+// TODO should contain the data structures used for actual searching in the graph and the mechanisms to construct them
+
 pub static MINIMAL_TRANSFER_TIME: u32 = 0;
 
+
+// TODO move stop to primitive_gtfs, it logically doesn't really belong here
 #[derive(Debug, Deserialize)]
 pub struct Stop {
     pub stop_id: String,
@@ -48,8 +52,10 @@ impl Stop {
 
     /// Adds the departure transfer chain, locks the departure nodes
     pub fn finalize(&mut self, nodes: &mut Vec<Node>) {
+        // sort nodes by departure times
         self.departure_nodes
             .sort_by(|a, b| nodes[*a].get_time().cmp(&nodes[*b].get_time()));
+        // add edges between them
         if self.dep_node_count() >= 2 {
             for index in 0..self.dep_node_count() - 2 {
                 let dep = self.get_dep_node(index);
@@ -64,7 +70,7 @@ impl Stop {
 
     pub fn get_earliest_dep(
         &self,
-        arr_time: u32,
+        time: u32,
         nodes: &Vec<Node>,
     ) -> Result<Option<usize>, &str> {
         if self.finalized {
@@ -74,11 +80,11 @@ impl Stop {
             while l <= r {
                 let middle = (l + r) / 2;
                 let addr = self.get_dep_node(middle as usize);
-                if nodes[addr].get_time() >= arr_time {
+                if nodes[addr].get_time() >= time {
                     best = Some(addr);
                     r = middle - 1;
                 }
-                if nodes[self.get_dep_node(middle as usize)].get_time() < arr_time {
+                if nodes[self.get_dep_node(middle as usize)].get_time() < time {
                     l = middle + 1;
                 }
             }

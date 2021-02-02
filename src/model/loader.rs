@@ -264,6 +264,8 @@ fn get_pedestrian_connections(
     return connections;
 }
 
+
+// TODO simplify and make readable
 pub fn load_transport_network(path: &Path) -> Network {
     let mut stops = load_stops(path);
     let routes = load_routes(path);
@@ -274,6 +276,7 @@ pub fn load_transport_network(path: &Path) -> Network {
     let mut nodes: Vec<Node> = Vec::new();
     let mut arrival_nodes: Vec<usize> = Vec::new();
     let mut current_node_index: usize = 0;
+    // TODO simplify and optimize
     for trip in trips.values() {
         for i in 1..trip.stop_times.len() {
             let mut dep_node = Node::new(
@@ -310,6 +313,7 @@ pub fn load_transport_network(path: &Path) -> Network {
     }
 
     println!("Calculating pedestrian connections...");
+    // TODO this takes ages! Speed up needed
     let utm_coords = get_stop_coords_in_utm(&stops);
     let squares = calculate_proximity_squares(&utm_coords, MAX_PEDESTRIAN_DIST);
     let connections = get_pedestrian_connections(&utm_coords, &squares, MAX_PEDESTRIAN_DIST);
