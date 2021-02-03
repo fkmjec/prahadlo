@@ -266,6 +266,7 @@ fn get_pedestrian_connections(
 
 /// creates a node collection with depart node, arrival node and the actual node in the vehicle
 /// Returns the transport node created
+/// TODO can this be done without so many side effects?
 fn create_node_triplet(nodes: &mut Vec<Node>, arrival_nodes: &mut Hashmap<String, Vec<usize>>, departure_nodes: &mut HashMap<String, Vec<usize>>, stop_time: &StopTime) -> Node {
     // the id is the node's position in the list, therefore we can use current list length as the id
     let mut transport_node = Node::new(nodes.len(), stop_time.arrival_time);
@@ -286,14 +287,20 @@ fn create_nodes(stops: &HashMap<String, Stop>, trips: &HashMap<String, Trip>) ->
     let mut nodes: Vec<Node> = Vec::new();
     let mut arrival_nodes: HashMap<String, Vec<usize>> = HashMap::new();
     let mut departure_nodes: HashMap<String, Vec<usize>> = HashMap::new();
+    for stop_id, _ in stops {
+        
+    }
+    // add nodes for trips and edges for vehicle movements including getting on and off of them
     for trip in trips.values() {
-        for stop_time in trip.stop_times {
-            
-            let mut last = create_node_triplet(&mut nodes, &mut arrival_nodes, departure_nodes, stop_time[0]);
-
-            for stop_time_instance in stop_time.
+        let mut last = create_node_triplet(&mut nodes, &mut arrival_nodes, &mut departure_nodes, &trip.stop_times[0]);
+        for i in 1..trip.stop_times.len() - 1 {
+            let stop_time = trip.stop_times[i];
+            let mut new = create_node_triplet(&mut nodes, &mut arrival_nodes, &mut departure_nodes, &stop_time);
+            last.add_edge(new.node_id);
+            last = new;
         }
     }
+
     return nodes;
 }
 
