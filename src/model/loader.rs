@@ -264,6 +264,37 @@ fn get_pedestrian_connections(
     return connections;
 }
 
+/// creates a node collection with depart node, arrival node and the actual node in the vehicle
+/// Returns the transport node created
+fn create_node_triplet(nodes: &mut Vec<Node>, arrival_nodes: &mut Hashmap<String, Vec<usize>>, departure_nodes: &mut HashMap<String, Vec<usize>>, stop_time: &StopTime) -> Node {
+    // the id is the node's position in the list, therefore we can use current list length as the id
+    let mut transport_node = Node::new(nodes.len(), stop_time.arrival_time);
+    nodes.push(transport_node);
+    let mut arr_node = Node::new(nodes.len(), stop_time.arrival_time + MINIMAL_TRANSFER_TIME);
+    nodes.push(arr_node);
+    let mut dep_node = Node::new(nodes.len(), stop_time.departure_time);
+    nodes.push(dep_node);
+    transport_node.add_edge(arr_node.node_id);
+    dep_node.add_edge(transport_node.node_id);
+    // adding nodes to temporary hashmaps for further processing and edge-adding
+    arrival_nodes.get(&stop_time.stop_id).unwrap().push(arr_node.node_id);
+    departure_nodes.get(&stop_time.stop_id).unwrap().push(dep_node.node_id);
+    return transport_node;
+}
+
+fn create_trip_nodes(stops: &HashMap<String, Stop>, trips: &HashMap<String, Trip>) -> Vec<Node> {
+    let mut nodes: Vec<Node> = Vec::new();
+    let mut arrival_nodes: Vec<usize> = Vec::new();
+    let mut current_node_index: usize = 0;
+    for trip in trips.values() {
+        for stop_time in trip.stop_times {
+            // TODO first node
+            first_transport_node = Node::new(stop_time.stop_id, nodes.len(), )
+            nodes.push()
+        }
+    }
+    return nodes;
+}
 
 // TODO simplify and make readable
 pub fn load_transport_network(path: &Path) -> Network {
@@ -273,39 +304,6 @@ pub fn load_transport_network(path: &Path) -> Network {
     load_service_exceptions(path, &mut services);
     let mut trips = load_trips(path);
     load_stop_times(path, &mut trips);
-    let mut nodes: Vec<Node> = Vec::new();
-    let mut arrival_nodes: Vec<usize> = Vec::new();
-    let mut current_node_index: usize = 0;
-    // TODO simplify and optimize
-    for trip in trips.values() {
-        for i in 1..trip.stop_times.len() {
-            let mut dep_node = Node::new(
-                trip.stop_times[i - 1].stop_id.clone(),
-                current_node_index,
-                NodeKind::Dep,
-                trip.stop_times[i - 1].departure_time,
-            );
-            dep_node.add_edge(Edge::new(
-                trip.stop_times[i - 1].departure_time,
-                trip.stop_times[i].arrival_time,
-                Some(trip.trip_id.clone()),
-                current_node_index + 1,
-            ));
-            nodes.push(dep_node);
-            let stop = stops.get_mut(&trip.stop_times[i - 1].stop_id).unwrap();
-            stop.add_dep_node(current_node_index);
-            current_node_index += 1;
-            let arr_node = Node::new(
-                trip.stop_times[i].stop_id.clone(),
-                current_node_index,
-                NodeKind::Arr,
-                trip.stop_times[i].arrival_time.clone(),
-            );
-            arrival_nodes.push(current_node_index);
-            nodes.push(arr_node);
-            current_node_index += 1;
-        }
-    }
 
     println!("Finalizing stops...");
     for stop in stops.values_mut() {

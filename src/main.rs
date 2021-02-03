@@ -8,6 +8,7 @@ use crate::model::loader;
 fn main() {
     println!("Hello, world! Prahadlo here!");
     let graph = loader::load_transport_network(Path::new("data/"));
+    /*
     loop {
         let mut input = String::new();
         println!("Please provide the two stop IDs separated by space!");
@@ -16,4 +17,5 @@ fn main() {
 
         println!("{}", graph.find_connection(split[0], split[1], 1100).unwrap().unwrap());
     }
+    */
 }

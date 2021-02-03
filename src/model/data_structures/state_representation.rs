@@ -59,10 +59,7 @@ impl Stop {
         if self.dep_node_count() >= 2 {
             for index in 0..self.dep_node_count() - 2 {
                 let dep = self.get_dep_node(index);
-                let dep_time = nodes[dep].get_time();
-                let arr = self.get_dep_node(index + 1);
-                let arr_time = nodes[arr].get_time();
-                nodes[dep].add_edge(Edge::new(dep_time, arr_time, None, arr));
+                nodes[dep].add_edge(dep);
             }
         }
         self.finalized = true;
@@ -96,26 +93,17 @@ impl Stop {
 }
 
 #[derive(Debug, Clone)]
-pub enum NodeKind {
-    Arr,
-    Dep,
-}
-
-#[derive(Debug, Clone)]
 pub struct Node {
-    pub stop_id: String,
+    // TODO Does node need to know its ID?
     pub node_id: usize,
-    node_kind: NodeKind,
     time: u32,
-    edges: Vec<Edge>,
+    edges: Vec<usize>, // neighbour list, neighbours represented by ID
 }
 
 impl Node {
-    pub fn new(stop_id: String, node_id: usize, node_kind: NodeKind, time: u32) -> Node {
+    pub fn new(node_id: usize, time: u32) -> Node {
         Node {
-            stop_id: stop_id,
             node_id: node_id,
-            node_kind: node_kind,
             time: time,
             edges: Vec::new(),
         }
@@ -125,12 +113,12 @@ impl Node {
         self.time
     }
 
-    pub fn get_edges(&self) -> &Vec<Edge> {
+    pub fn get_edges(&self) -> &Vec<usize> {
         &self.edges
     }
 
-    pub fn add_edge(&mut self, edge: Edge) {
-        &self.edges.push(edge);
+    pub fn add_edge(&mut self, node_id: usize) {
+        &self.edges.push(node_id);
     }
 }
 
@@ -151,35 +139,6 @@ impl Ord for Node {
 impl PartialOrd for Node {
     fn partial_cmp(&self, other: &Node) -> Option<Ordering> {
         Some(self.cmp(other))
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Edge {
-    departs_at: u32,
-    arrives_at: u32,
-    trip_id: Option<String>,
-    pub target_node: usize,
-}
-
-impl Edge {
-    pub fn new(
-        departs_at: u32,
-        arrives_at: u32,
-        trip_id: Option<String>,
-        target_node: usize,
-    ) -> Edge {
-        Edge {
-            departs_at: departs_at,
-            arrives_at: arrives_at,
-            trip_id: trip_id,
-            target_node: target_node,
-        }
-    }
-
-    /// returns the cost of the edge in seconds
-    pub fn cost(&self) -> u32 {
-        return &self.arrives_at - &self.departs_at;
     }
 }
 
@@ -208,7 +167,7 @@ impl Network {
             nodes: nodes,
         }
     }
-
+    /*
     pub fn find_connection(
         &self,
         dep_stop_id: &str,
@@ -249,4 +208,5 @@ impl Network {
         }
         return Ok(None);
     }
+    */
 }
