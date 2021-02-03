@@ -282,15 +282,16 @@ fn create_node_triplet(nodes: &mut Vec<Node>, arrival_nodes: &mut Hashmap<String
     return transport_node;
 }
 
-fn create_trip_nodes(stops: &HashMap<String, Stop>, trips: &HashMap<String, Trip>) -> Vec<Node> {
+fn create_nodes(stops: &HashMap<String, Stop>, trips: &HashMap<String, Trip>) -> Vec<Node> {
     let mut nodes: Vec<Node> = Vec::new();
-    let mut arrival_nodes: Vec<usize> = Vec::new();
-    let mut current_node_index: usize = 0;
+    let mut arrival_nodes: HashMap<String, Vec<usize>> = HashMap::new();
+    let mut departure_nodes: HashMap<String, Vec<usize>> = HashMap::new();
     for trip in trips.values() {
         for stop_time in trip.stop_times {
-            // TODO first node
-            first_transport_node = Node::new(stop_time.stop_id, nodes.len(), )
-            nodes.push()
+            
+            let mut last = create_node_triplet(&mut nodes, &mut arrival_nodes, departure_nodes, stop_time[0]);
+
+            for stop_time_instance in stop_time.
         }
     }
     return nodes;
