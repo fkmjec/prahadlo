@@ -91,12 +91,6 @@ impl Stop {
 }
 
 #[derive(Debug, Clone)]
-pub enum NodeKind {
-    Arr,
-    Dep,
-}
-
-#[derive(Debug, Clone)]
 pub struct Node {
     pub stop: Option<Rc<Stop>>,
     pub trip: Option<Rc<Trip>>,
@@ -146,28 +140,6 @@ impl Ord for Node {
 impl PartialOrd for Node {
     fn partial_cmp(&self, other: &Node) -> Option<Ordering> {
         Some(self.cmp(other))
-    }
-}
-
-
-impl Edge {
-    pub fn new(
-        departs_at: u32,
-        arrives_at: u32,
-        trip_id: Option<String>,
-        target_node: usize,
-    ) -> Edge {
-        Edge {
-            departs_at: departs_at,
-            arrives_at: arrives_at,
-            trip_id: trip_id,
-            target_node: target_node,
-        }
-    }
-
-    /// returns the cost of the edge in seconds
-    pub fn cost(&self) -> u32 {
-        return &self.arrives_at - &self.departs_at;
     }
 }
 
