@@ -1,11 +1,12 @@
-use crate::model::data_structures::primitive_gtfs::*;
+use crate::model::primitive_gtfs::*;
 use core::cmp::Ordering;
 use serde::Deserialize;
 use std::collections::{BinaryHeap, HashMap};
+use std::rc::Rc;
 
 pub static MINIMAL_TRANSFER_TIME: u32 = 0;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Stop {
     pub stop_id: String,
     pub stop_name: String,
@@ -33,9 +34,9 @@ impl Stop {
         self.departure_nodes[index]
     }
 
-    pub fn add_dep_node(&mut self, dep_node: usize) -> Result<(), &str> {
+    pub fn add_dep_node(&mut self, dep_node: &usize) -> Result<(), &str> {
         if !self.finalized {
-            &self.departure_nodes.push(dep_node);
+            &self.departure_nodes.push(*dep_node);
             Ok(())
         } else {
             Err("Tried to add a new departure node to an already finalized Stop.")
@@ -56,7 +57,7 @@ impl Stop {
                 let dep_time = nodes[dep].get_time();
                 let arr = self.get_dep_node(index + 1);
                 let arr_time = nodes[arr].get_time();
-                nodes[dep].add_edge(Edge::new(dep_time, arr_time, None, arr));
+                nodes[dep].add_edge(&arr);
             }
         }
         self.finalized = true;
@@ -97,20 +98,20 @@ pub enum NodeKind {
 
 #[derive(Debug, Clone)]
 pub struct Node {
-    pub stop_id: String,
+    pub stop: Option<Rc<Stop>>,
+    pub trip: Option<Rc<Trip>>,
     pub node_id: usize,
-    node_kind: NodeKind,
     time: u32,
-    edges: Vec<Edge>,
+    edges: Vec<usize>,
 }
 
 impl Node {
-    pub fn new(stop_id: String, node_id: usize, node_kind: NodeKind, time: u32) -> Node {
+    pub fn new(stop: Option<Rc<Stop>>, trip: Option<Rc<Trip>>, node_id: &usize, time: &u32) -> Node {
         Node {
-            stop_id: stop_id,
-            node_id: node_id,
-            node_kind: node_kind,
-            time: time,
+            stop: stop,
+            trip: trip,
+            node_id: *node_id,
+            time: *time,
             edges: Vec::new(),
         }
     }
@@ -123,8 +124,8 @@ impl Node {
         &self.edges
     }
 
-    pub fn add_edge(&mut self, edge: Edge) {
-        &self.edges.push(edge);
+    pub fn add_edge(&mut self, node: &usize) {
+        &self.edges.push(*node);
     }
 }
 
@@ -148,13 +149,6 @@ impl PartialOrd for Node {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Edge {
-    departs_at: u32,
-    arrives_at: u32,
-    trip_id: Option<String>,
-    pub target_node: usize,
-}
 
 impl Edge {
     pub fn new(

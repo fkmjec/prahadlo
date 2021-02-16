@@ -1,7 +1,9 @@
-use crate::model::*;
+use crate::model::primitive_gtfs::*;
+use crate::model::state_representation::*;
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
+use std::rc::Rc;
 
 use chrono::NaiveDate;
 use geo_types::Point;
@@ -264,6 +266,13 @@ fn get_pedestrian_connections(
     return connections;
 }
 
+/// Creates a node, adds it to the node vector, returns the id
+fn create_node(nodes: &mut Vec<Node>, stop: Option<Rc<Stop>>, trip: Option<Rc<Trip>>, time: &u32) -> usize {
+    let node = Node::new(stop, trip, &nodes.len(), time);
+    nodes.push(node);
+    return node.node_id.clone();
+}
+
 pub fn load_transport_network(path: &Path) -> Network {
     let mut stops = load_stops(path);
     let routes = load_routes(path);
@@ -273,34 +282,23 @@ pub fn load_transport_network(path: &Path) -> Network {
     load_stop_times(path, &mut trips);
     let mut nodes: Vec<Node> = Vec::new();
     let mut arrival_nodes: Vec<usize> = Vec::new();
-    let mut current_node_index: usize = 0;
     for trip in trips.values() {
-        for i in 1..trip.stop_times.len() {
-            let mut dep_node = Node::new(
-                trip.stop_times[i - 1].stop_id.clone(),
-                current_node_index,
-                NodeKind::Dep,
-                trip.stop_times[i - 1].departure_time,
-            );
-            dep_node.add_edge(Edge::new(
-                trip.stop_times[i - 1].departure_time,
-                trip.stop_times[i].arrival_time,
-                Some(trip.trip_id.clone()),
-                current_node_index + 1,
-            ));
-            nodes.push(dep_node);
-            let stop = stops.get_mut(&trip.stop_times[i - 1].stop_id).unwrap();
-            stop.add_dep_node(current_node_index);
-            current_node_index += 1;
-            let arr_node = Node::new(
-                trip.stop_times[i].stop_id.clone(),
-                current_node_index,
-                NodeKind::Arr,
-                trip.stop_times[i].arrival_time.clone(),
-            );
-            arrival_nodes.push(current_node_index);
-            nodes.push(arr_node);
-            current_node_index += 1;
+        let mut prev_transport = None;
+        for i in 0..trip.stop_times.len() {
+            // TODO add stop and trip correctly
+            let mut transport = create_node(&mut nodes, None, None, &stop_times[i].departure_time);
+            // add edge from previous transport node
+            match prev_transport {
+                Some(id) => nodes[prev_transport].add_edge(&transport),
+                None => (),
+            }
+            let mut dep = create_node(&mut nodes, None, None, &stop_times[i].departure_time);
+            stops.get(&stop_times.stop_id).unwrap().add_dep_node(&dep);
+            let mut arr = create_node(&mut nodes,None, None, &stop_times[i].arrival_time + MINIMAL_TRANSFER_TIME);
+            arrival_nodes.push(arr);
+            nodes[transport].add_edge(&arr);
+            nodes[dep].add_edge(&transport);
+            prev_transport = Some(transport);
         }
     }
 
@@ -316,42 +314,7 @@ pub fn load_transport_network(path: &Path) -> Network {
 
     println!("Adding edges between arrival and departure nodes...");
     for arr_node in arrival_nodes {
-        let arr_time = nodes[arr_node].get_time();
-        if let Some(dep) = stops
-            .get(&nodes[arr_node].stop_id)
-            .unwrap()
-            .get_earliest_dep(arr_time + MINIMAL_TRANSFER_TIME, &nodes)
-            .unwrap()
-        {
-            nodes[arr_node].add_edge(Edge::new(
-                arr_time,
-                arr_time + MINIMAL_TRANSFER_TIME,
-                None,
-                dep,
-            ))
-        }
-        if let Some(conn_arr) = connections.get(&nodes[arr_node].stop_id) {
-            for conn in conn_arr {
-                let node_index = nodes.len();
-                let cost =
-                    (BASE_PEDESTRIAN_TRANSFER_TIME + conn.1 / PEDESTRIAN_SPEED).round() as u32;
-                let new_arr_node =
-                    Node::new(conn.0.clone(), node_index, NodeKind::Arr, arr_time + cost);
-                if let Some(dep) = stops
-                    .get(&conn.0)
-                    .unwrap()
-                    .get_earliest_dep(arr_time + cost + MINIMAL_TRANSFER_TIME, &nodes)
-                    .unwrap()
-                {
-                    nodes[arr_node].add_edge(Edge::new(
-                        arr_time + cost,
-                        arr_time + cost + MINIMAL_TRANSFER_TIME,
-                        None,
-                        dep,
-                    ))
-                }
-            }
-        }
+        // TODO add edges from arrival nodes to departure node chain
     }
 
     return Network::new(stops, routes, trips, services, nodes);
