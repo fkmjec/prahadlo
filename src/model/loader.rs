@@ -291,6 +291,7 @@ pub fn load_transport_network(path: &Path) -> Network {
         for i in 0..trip.stop_times.len() {
             // TODO add stop and trip correctly
             let mut transport: usize = create_node(&mut nodes, None, None, &trip.stop_times[i].departure_time);
+            nodes[transport].trip = Some(trip.clone());
             // add edge from previous transport node
             match prev_transport {
                 Some(id) => nodes[id].add_edge(&transport),
