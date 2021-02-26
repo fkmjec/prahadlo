@@ -25,7 +25,7 @@ pub struct Route {
     pub is_night: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Trip {
     pub route_id: String,
     pub service_id: String,
@@ -43,7 +43,7 @@ pub struct Trip {
     pub stop_times: Vec<StopTime>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct StopTime {
     pub trip_id: String,
     #[serde(deserialize_with = "deserialize_time")]

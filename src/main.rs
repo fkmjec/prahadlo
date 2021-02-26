@@ -2,7 +2,6 @@ mod model;
 
 use std::path::Path;
 
-use crate::model::data_structures::Node;
 use crate::model::loader;
 
 fn main() {

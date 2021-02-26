@@ -34,6 +34,10 @@ impl Stop {
         self.departure_nodes[index]
     }
 
+    pub fn get_dep_nodes(&self) -> &Vec<usize> {
+        return &self.departure_nodes
+    }
+
     pub fn add_dep_node(&mut self, dep_node: &usize) -> Result<(), &str> {
         if !self.finalized {
             &self.departure_nodes.push(*dep_node);
@@ -114,7 +118,7 @@ impl Node {
         self.time
     }
 
-    pub fn get_edges(&self) -> &Vec<Edge> {
+    pub fn get_edges(&self) -> &Vec<usize> {
         &self.edges
     }
 
@@ -145,18 +149,18 @@ impl PartialOrd for Node {
 
 #[derive(Debug)]
 pub struct Network {
-    stops: HashMap<String, Stop>,
+    stops: HashMap<String, Rc<Stop>>,
     routes: HashMap<String, Route>,
-    trips: HashMap<String, Trip>,
+    trips: HashMap<String, Rc<Trip>>,
     services: HashMap<String, Service>,
     nodes: Vec<Node>,
 }
 
 impl Network {
     pub fn new(
-        stops: HashMap<String, Stop>,
+        stops: HashMap<String, Rc<Stop>>,
         routes: HashMap<String, Route>,
-        trips: HashMap<String, Trip>,
+        trips: HashMap<String, Rc<Trip>>,
         services: HashMap<String, Service>,
         nodes: Vec<Node>,
     ) -> Network {
@@ -168,7 +172,7 @@ impl Network {
             nodes: nodes,
         }
     }
-
+/*
     pub fn find_connection(
         &self,
         dep_stop_id: &str,
@@ -209,4 +213,5 @@ impl Network {
         }
         return Ok(None);
     }
+    */
 }
