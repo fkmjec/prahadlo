@@ -191,7 +191,7 @@ fn load_stop_times(path: &Path, trips: &mut HashMap<String, Trip>) {
 }
 
 /// Converts stop coordinates in WGS84 to UTM coordinates in zone 33U
-fn get_stop_coords_in_utm(stops: &HashMap<String, Stop>) -> HashMap<String, Point<f32>> {
+fn get_stop_coords_in_utm(stops: &HashMap<String, Rc<Stop>>) -> HashMap<String, Point<f32>> {
     let mut stop_coords: HashMap<String, Point<f32>> = HashMap::new();
     for (stop_id, stop) in stops {
         let from = "EPSG:4326";
@@ -232,11 +232,12 @@ fn calculate_proximity_squares(
 /// and it efficiently computes connections between stops closer than max_conn_dist. (efficiently means faster than
 /// O(N^2) N being the number of all stops.
 fn get_pedestrian_connections(
+    stops: &HashMap<String, Rc<Stop>>,
     utm_coords: &HashMap<String, Point<f32>>,
     squares: &HashMap<(i32, i32), Vec<String>>,
     max_conn_dist: f32,
-) -> HashMap<String, Vec<(String, f32)>> {
-    let mut connections: HashMap<String, Vec<(String, f32)>> = HashMap::new();
+) -> HashMap<String, Vec<(Rc<Stop>, f32)>> {
+    let mut connections: HashMap<String, Vec<(Rc<Stop>, f32)>> = HashMap::new();
     for ((x, y), stop_ids) in squares {
         for stop_id in stop_ids {
             let coord = utm_coords.get(stop_id).unwrap();
@@ -249,11 +250,11 @@ fn get_pedestrian_connections(
                                 + (coord.y() - near_coord.y()).abs();
                             if (distance <= max_conn_dist) {
                                 if let Some(connection) = connections.get_mut(stop_id) {
-                                    connection.push((String::from(near_id), distance));
+                                    connection.push((stops.get(near_id).unwrap().clone(), distance));
                                 } else {
                                     connections.insert(
                                         String::from(stop_id),
-                                        vec![(String::from(near_id), distance)],
+                                        vec![(stops.get(near_id).unwrap().clone(), distance)],
                                     );
                                 }
                             }
@@ -267,13 +268,40 @@ fn get_pedestrian_connections(
 }
 
 /// Creates a node, adds it to the node vector, returns the id
-fn create_node(nodes: &mut Vec<Node>, stop: Option<Rc<Stop>>, trip: Option<Rc<Trip>>, time: &u32) -> usize {
+fn create_node(
+    nodes: &mut Vec<Node>,
+    stop: Option<Rc<Stop>>,
+    trip: Option<Rc<Trip>>,
+    time: &u32,
+) -> usize {
     let node = Node::new(stop, trip, &nodes.len(), time);
     let node_id = node.node_id;
     nodes.push(node);
     return node_id;
 }
 
+fn node_add_pedestrian_connections(
+    nodes: &mut Vec<Node>,
+    conns: &HashMap<String, Vec<(Rc<Stop>, f32)>>,
+    arr_id: usize,
+) -> Vec<usize> {
+    let stop = nodes[arr_id].stop.as_ref().unwrap();
+    let stop_conns: Option<&Vec<(Rc<Stop>, f32)>> = conns.get(&stop.stop_id);
+    let mut new_nodes = Vec::new();
+    match stop_conns {
+        Some(conns) => {
+            for conn in conns {
+                let new_node_id = create_node(nodes, None, None, &(nodes[arr_id].get_time() + (conn.1 / PEDESTRIAN_SPEED) as u32));
+                nodes[arr_id].add_edge(&new_node_id);
+                new_nodes.push(new_node_id);
+            }
+        }
+        None => (),
+    };
+    return new_nodes;
+}
+
+// TODO make readable
 pub fn load_transport_network(path: &Path) -> Network {
     let mut stops_raw = load_stops(path);
     let routes = load_routes(path);
@@ -281,16 +309,17 @@ pub fn load_transport_network(path: &Path) -> Network {
     load_service_exceptions(path, &mut services);
     let mut trips_raw = load_trips(path);
     load_stop_times(path, &mut trips_raw);
-    // TODO make readable
-    let trips: HashMap<String, Rc<Trip>> = trips_raw.into_iter()
-                .map(|(trip_id, trip)| (trip_id, Rc::new(trip.clone()))).collect();
+    let trips: HashMap<String, Rc<Trip>> = trips_raw
+        .into_iter()
+        .map(|(trip_id, trip)| (trip_id, Rc::new(trip.clone())))
+        .collect();
     let mut nodes: Vec<Node> = Vec::new();
     let mut arrival_nodes: Vec<usize> = Vec::new();
     for trip in trips.values() {
         let mut prev_transport: Option<usize> = None;
         for i in 0..trip.stop_times.len() {
-            // TODO add stop and trip correctly
-            let mut transport: usize = create_node(&mut nodes, None, None, &trip.stop_times[i].departure_time);
+            let mut transport: usize =
+                create_node(&mut nodes, None, None, &trip.stop_times[i].departure_time);
             nodes[transport].trip = Some(trip.clone());
             // add edge from previous transport node
             match prev_transport {
@@ -298,8 +327,16 @@ pub fn load_transport_network(path: &Path) -> Network {
                 None => (),
             }
             let mut dep = create_node(&mut nodes, None, None, &trip.stop_times[i].departure_time);
-            stops_raw.get_mut(&trip.stop_times[i].stop_id).unwrap().add_dep_node(&dep);
-            let mut arr = create_node(&mut nodes,None, None, &(trip.stop_times[i].arrival_time + MINIMAL_TRANSFER_TIME));
+            stops_raw
+                .get_mut(&trip.stop_times[i].stop_id)
+                .unwrap()
+                .add_dep_node(&dep);
+            let mut arr = create_node(
+                &mut nodes,
+                None,
+                None,
+                &(trip.stop_times[i].arrival_time + MINIMAL_TRANSFER_TIME),
+            );
             arrival_nodes.push(arr);
             nodes[transport].add_edge(&arr);
             nodes[dep].add_edge(&transport);
@@ -319,13 +356,23 @@ pub fn load_transport_network(path: &Path) -> Network {
     }
 
     println!("Calculating pedestrian connections...");
-    let utm_coords = get_stop_coords_in_utm(&stops_raw);
+    let utm_coords = get_stop_coords_in_utm(&stops);
     let squares = calculate_proximity_squares(&utm_coords, MAX_PEDESTRIAN_DIST);
-    let connections = get_pedestrian_connections(&utm_coords, &squares, MAX_PEDESTRIAN_DIST);
-
+    let connections = get_pedestrian_connections(&stops, &utm_coords, &squares, MAX_PEDESTRIAN_DIST);
+    
+    let mut new_arr = Vec::new();
+    for arr_id in &arrival_nodes {
+        new_arr.append(&mut node_add_pedestrian_connections(&mut nodes, &connections, *arr_id));
+    }
+    arrival_nodes.append(&mut new_arr);
+    
     println!("Adding edges between arrival and departure nodes...");
-    for arr_node in arrival_nodes {
-        // TODO add edges from arrival nodes to departure node chain
+    for arr_id in &arrival_nodes {
+        let stop = nodes[*arr_id].stop.as_ref().unwrap(); // arr node must have a stop
+        match stop.get_earliest_dep(nodes[*arr_id].get_time(), &nodes) {
+            Some(dep_id) => nodes[*arr_id].add_edge(&dep_id),
+            None => (),
+        }
     }
 
     return Network::new(stops, routes, trips, services, nodes);

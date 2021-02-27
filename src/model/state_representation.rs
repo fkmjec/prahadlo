@@ -71,26 +71,22 @@ impl Stop {
         &self,
         arr_time: u32,
         nodes: &Vec<Node>,
-    ) -> Result<Option<usize>, &str> {
-        if self.finalized {
-            let mut l: i32 = 0;
-            let mut r = self.dep_node_count() as i32 - 1;
-            let mut best = None;
-            while l <= r {
-                let middle = (l + r) / 2;
-                let addr = self.get_dep_node(middle as usize);
-                if nodes[addr].get_time() >= arr_time {
-                    best = Some(addr);
-                    r = middle - 1;
-                }
-                if nodes[self.get_dep_node(middle as usize)].get_time() < arr_time {
-                    l = middle + 1;
-                }
+    ) -> Option<usize> {
+        let mut l: i32 = 0;
+        let mut r = self.dep_node_count() as i32 - 1;
+        let mut best = None;
+        while l <= r {
+            let middle = (l + r) / 2;
+            let addr = self.get_dep_node(middle as usize);
+            if nodes[addr].get_time() >= arr_time {
+                best = Some(addr);
+                r = middle - 1;
             }
-            Ok(best)
-        } else {
-            Err("Trying to get earliest next departure on a Stop that is not finalized.")
+            if nodes[self.get_dep_node(middle as usize)].get_time() < arr_time {
+                l = middle + 1;
+            }
         }
+        return best;
     }
 }
 
